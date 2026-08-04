@@ -24,7 +24,7 @@ import {
   trafficLights,
   type FrameSettings,
 } from "./export/layout.ts";
-import { CHROME_TITLE_SCALE, SHADOW, chromeBorderColor, chromeTitleColor } from "./export/scene.ts";
+import { CHROME_TITLE_SCALE, chromeBorderColor, chromeTitleColor, resolveShadow } from "./export/scene.ts";
 import { Logo } from "./ui/Logo.tsx";
 import { Sidebar } from "./ui/Sidebar.tsx";
 import { SplitButton } from "./ui/SplitButton.tsx";
@@ -214,6 +214,7 @@ export function App() {
   }, [editor]);
 
   const lights = layout ? trafficLights(layout, frame) : [];
+  const shadow = resolveShadow(frame.shadowStrength);
 
   return (
     <div className="app">
@@ -284,8 +285,8 @@ export function App() {
                       height: layout.terminal.height,
                       borderRadius: frame.radius,
                       background: theme.background,
-                      boxShadow: frame.shadow
-                        ? `0 ${SHADOW.offsetY}px ${SHADOW.stdDeviation * 2}px rgba(0, 0, 0, ${SHADOW.opacity})`
+                      boxShadow: shadow
+                        ? `0 ${shadow.offsetY}px ${shadow.stdDeviation * 2}px rgba(0, 0, 0, ${shadow.opacity})`
                         : "none",
                     }}
                   >

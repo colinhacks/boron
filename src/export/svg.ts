@@ -1,7 +1,7 @@
 import { gradientEndpoints } from "./background.ts";
 import { FONT_NAME, embeddedFontCss } from "./fonts.ts";
 import { trafficLights } from "./layout.ts";
-import { CHROME_TITLE_SCALE, SHADOW, chromeBorderColor, chromeTitleColor, type Scene } from "./scene.ts";
+import { CHROME_TITLE_SCALE, chromeBorderColor, chromeTitleColor, resolveShadow, type Scene } from "./scene.ts";
 
 const XML_ESCAPES: Record<string, string> = {
   "&": "&amp;",
@@ -44,10 +44,11 @@ export async function renderToSvg(scene: Scene): Promise<string> {
     );
   }
 
-  if (frame.shadow) {
+  const shadow = resolveShadow(frame.shadowStrength);
+  if (shadow) {
     defs.push(
       `<filter id="boron-shadow" x="-50%" y="-50%" width="200%" height="200%">` +
-        `<feDropShadow dx="0" dy="${SHADOW.offsetY}" stdDeviation="${SHADOW.stdDeviation}" flood-color="#000000" flood-opacity="${SHADOW.opacity}"/>` +
+        `<feDropShadow dx="0" dy="${shadow.offsetY}" stdDeviation="${shadow.stdDeviation}" flood-color="#000000" flood-opacity="${shadow.opacity}"/>` +
         `</filter>`,
     );
   }
@@ -63,7 +64,7 @@ export async function renderToSvg(scene: Scene): Promise<string> {
   }
 
   body.push(
-    `<rect x="${round(terminal.x)}" y="${round(terminal.y)}" width="${round(terminal.width)}" height="${round(terminal.height)}" rx="${frame.radius}" fill="${theme.background}"${frame.shadow ? ' filter="url(#boron-shadow)"' : ""}/>`,
+    `<rect x="${round(terminal.x)}" y="${round(terminal.y)}" width="${round(terminal.width)}" height="${round(terminal.height)}" rx="${frame.radius}" fill="${theme.background}"${shadow ? ' filter="url(#boron-shadow)"' : ""}/>`,
   );
 
   const clipped: string[] = [];

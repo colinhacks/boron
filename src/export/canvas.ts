@@ -1,7 +1,7 @@
 import { gradientEndpoints } from "./background.ts";
 import { ensureFontsLoaded } from "./fonts.ts";
 import { fontString, trafficLights } from "./layout.ts";
-import { CHROME_TITLE_SCALE, SHADOW, chromeBorderColor, chromeTitleColor, type Scene } from "./scene.ts";
+import { CHROME_TITLE_SCALE, chromeBorderColor, chromeTitleColor, resolveShadow, type Scene } from "./scene.ts";
 
 function roundedRect(
   ctx: CanvasRenderingContext2D,
@@ -51,11 +51,12 @@ export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene, opaqueBac
     ctx.fillRect(0, 0, layout.width, layout.height);
   }
 
-  if (frame.shadow) {
+  const shadow = resolveShadow(frame.shadowStrength);
+  if (shadow) {
     ctx.save();
-    ctx.shadowColor = `rgba(0, 0, 0, ${SHADOW.opacity})`;
-    ctx.shadowBlur = SHADOW.stdDeviation * 2;
-    ctx.shadowOffsetY = SHADOW.offsetY;
+    ctx.shadowColor = `rgba(0, 0, 0, ${shadow.opacity})`;
+    ctx.shadowBlur = shadow.stdDeviation * 2;
+    ctx.shadowOffsetY = shadow.offsetY;
     ctx.fillStyle = theme.background;
     roundedRect(ctx, terminal.x, terminal.y, terminal.width, terminal.height, frame.radius);
     ctx.fill();

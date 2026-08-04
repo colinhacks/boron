@@ -18,7 +18,8 @@ export interface FrameSettings {
   radius: number;
   showChrome: boolean;
   title: string;
-  shadow: boolean;
+  /** 0-100. Zero casts no shadow at all. */
+  shadowStrength: number;
   /** Keeps a two-word snippet from exporting as a sliver. */
   minColumns: number;
 }
@@ -30,7 +31,7 @@ export const DEFAULT_FRAME: FrameSettings = {
   radius: 12,
   showChrome: true,
   title: "",
-  shadow: true,
+  shadowStrength: 100,
   minColumns: 46,
 };
 

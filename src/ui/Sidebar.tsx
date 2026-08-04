@@ -41,6 +41,28 @@ function Slider({ label, value, min, max, step = 1, suffix = "px", onChange }: S
   );
 }
 
+interface SwitchProps {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}
+
+function Switch({ label, checked, onChange }: SwitchProps) {
+  return (
+    <span className="switch">
+      <input
+        type="checkbox"
+        role="switch"
+        aria-label={label}
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span className="switch__track" aria-hidden="true" />
+      <span className="switch__thumb" aria-hidden="true" />
+    </span>
+  );
+}
+
 export interface SidebarProps {
   theme: Theme;
   onThemeChange: (id: string) => void;
@@ -111,35 +133,30 @@ export function Sidebar({
       </section>
 
       <section className="panel">
-        <h2 className="panel__title">Window</h2>
-        <Field label="Title">
-          <input
-            type="text"
-            name="window-title"
-            className="text-input"
-            value={frame.title}
-            placeholder="zsh — boron"
-            onChange={(event) => onFrameChange({ title: event.target.value })}
+        <div className="panel__header">
+          <h2 className="panel__title">Title bar</h2>
+          <Switch
+            label="Title bar"
+            checked={frame.showChrome}
+            onChange={(showChrome) => onFrameChange({ showChrome })}
           />
-        </Field>
-        <div className="toggle-row">
-          <button
-            type="button"
-            className={`chip${frame.showChrome ? " chip--active" : ""}`}
-            aria-pressed={frame.showChrome}
-            onClick={() => onFrameChange({ showChrome: !frame.showChrome })}
-          >
-            Title bar
-          </button>
-          <button
-            type="button"
-            className={`chip${frame.shadow ? " chip--active" : ""}`}
-            aria-pressed={frame.shadow}
-            onClick={() => onFrameChange({ shadow: !frame.shadow })}
-          >
-            Shadow
-          </button>
         </div>
+        {frame.showChrome ? (
+          <Field label="Title">
+            <input
+              type="text"
+              name="window-title"
+              className="text-input"
+              value={frame.title}
+              placeholder="zsh — boron"
+              onChange={(event) => onFrameChange({ title: event.target.value })}
+            />
+          </Field>
+        ) : null}
+      </section>
+
+      <section className="panel">
+        <h2 className="panel__title">Window</h2>
         <Slider
           label="Corner radius"
           value={frame.radius}
@@ -147,42 +164,54 @@ export function Sidebar({
           max={28}
           onChange={(radius) => onFrameChange({ radius })}
         />
+        <Slider
+          label="Shadow"
+          value={frame.shadowStrength}
+          min={0}
+          max={100}
+          suffix="%"
+          onChange={(shadowStrength) => onFrameChange({ shadowStrength })}
+        />
       </section>
 
-      <section className="panel">
-        <h2 className="panel__title">Layout</h2>
-        <Slider
-          label="Font size"
-          value={frame.fontSize}
-          min={10}
-          max={28}
-          onChange={(fontSize) => onFrameChange({ fontSize })}
-        />
-        <Slider
-          label="Line height"
-          value={frame.lineHeightRatio}
-          min={1.1}
-          max={2.2}
-          step={0.05}
-          suffix="×"
-          onChange={(lineHeightRatio) => onFrameChange({ lineHeightRatio })}
-        />
-        <Slider
-          label="Padding"
-          value={frame.framePadding}
-          min={0}
-          max={140}
-          onChange={(framePadding) => onFrameChange({ framePadding })}
-        />
-        <Slider
-          label="Minimum width"
-          value={frame.minColumns}
-          min={20}
-          max={120}
-          suffix=" cols"
-          onChange={(minColumns) => onFrameChange({ minColumns })}
-        />
-      </section>
+      {/* Defaults that are already right for almost every block — folded away so
+          the panel above reads as the whole of the everyday surface. */}
+      <details className="advanced">
+        <summary className="advanced__summary">Advanced</summary>
+        <div className="advanced__body">
+          <Slider
+            label="Font size"
+            value={frame.fontSize}
+            min={10}
+            max={28}
+            onChange={(fontSize) => onFrameChange({ fontSize })}
+          />
+          <Slider
+            label="Line height"
+            value={frame.lineHeightRatio}
+            min={1.1}
+            max={2.2}
+            step={0.05}
+            suffix="×"
+            onChange={(lineHeightRatio) => onFrameChange({ lineHeightRatio })}
+          />
+          <Slider
+            label="Padding"
+            value={frame.framePadding}
+            min={0}
+            max={140}
+            onChange={(framePadding) => onFrameChange({ framePadding })}
+          />
+          <Slider
+            label="Minimum width"
+            value={frame.minColumns}
+            min={20}
+            max={120}
+            suffix=" cols"
+            onChange={(minColumns) => onFrameChange({ minColumns })}
+          />
+        </div>
+      </details>
     </aside>
   );
 }
