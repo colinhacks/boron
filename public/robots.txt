@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://boron.sh/sitemap.xml

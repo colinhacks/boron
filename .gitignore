@@ -6,3 +6,9 @@ dist
 .DS_Store
 .fray
 .vercel
+
+# Logo exploration output — regenerate with the scripts in logo-concepts/.
+# The shipping assets live in public/ and are committed.
+logo-concepts/*.svg
+logo-concepts/*.png
+logo-concepts/*.html

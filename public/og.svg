@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <rect width="1200" height="630" fill="#0f1117"/>
+  <rect x="517" y="115" width="30" height="30" rx="1.5" fill="#ff6b81"/>
+  <rect x="551" y="115" width="30" height="30" rx="1.5" fill="#ff6b81"/>
+  <rect x="585" y="115" width="30" height="30" rx="1.5" fill="#ff6b81"/>
+  <rect x="619" y="115" width="30" height="30" rx="1.5" fill="#ff6b81"/>
+  <rect x="517" y="149" width="30" height="30" rx="1.5" fill="#fcb134"/>
+  <rect x="653" y="149" width="30" height="30" rx="1.5" fill="#fcb134"/>
+  <rect x="517" y="183" width="30" height="30" rx="1.5" fill="#85d461"/>
+  <rect x="653" y="183" width="30" height="30" rx="1.5" fill="#85d461"/>
+  <rect x="517" y="217" width="30" height="30" rx="1.5" fill="#36d9b7"/>
+  <rect x="551" y="217" width="30" height="30" rx="1.5" fill="#36d9b7"/>
+  <rect x="585" y="217" width="30" height="30" rx="1.5" fill="#36d9b7"/>
+  <rect x="619" y="217" width="30" height="30" rx="1.5" fill="#36d9b7"/>
+  <rect x="517" y="251" width="30" height="30" rx="1.5" fill="#37c4f2"/>
+  <rect x="653" y="251" width="30" height="30" rx="1.5" fill="#37c4f2"/>
+  <rect x="517" y="285" width="30" height="30" rx="1.5" fill="#70a0fa"/>
+  <rect x="653" y="285" width="30" height="30" rx="1.5" fill="#70a0fa"/>
+  <rect x="517" y="319" width="30" height="30" rx="1.5" fill="#c084fc"/>
+  <rect x="551" y="319" width="30" height="30" rx="1.5" fill="#c084fc"/>
+  <rect x="585" y="319" width="30" height="30" rx="1.5" fill="#c084fc"/>
+  <rect x="619" y="319" width="30" height="30" rx="1.5" fill="#c084fc"/>
+  <text x="600" y="452" text-anchor="middle" font-family="ui-monospace, 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace" font-size="76" font-weight="500" fill="#e7eaf2" letter-spacing="-2">boron</text>
+  <text x="600" y="512" text-anchor="middle" font-family="ui-monospace, 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace" font-size="28" fill="#949cb0">beautiful images of your terminal</text>
+</svg>
