@@ -3,11 +3,16 @@ import type { Theme } from "../core/themes.ts";
 import type { RenderLine } from "../core/types.ts";
 import { FONT_FAMILY } from "./fonts.ts";
 
+/**
+ * Space between the terminal edge and its text. Fixed rather than tunable: it
+ * is the one measurement a real terminal doesn't let you set either, and every
+ * value but this one made the block look either cramped or hollow.
+ */
+export const TERMINAL_PADDING = 24;
+
 export interface FrameSettings {
   fontSize: number;
   lineHeightRatio: number;
-  /** Space between the terminal edge and its text. */
-  terminalPadding: number;
   /** Space between the terminal and the edge of the image. */
   framePadding: number;
   radius: number;
@@ -21,7 +26,6 @@ export interface FrameSettings {
 export const DEFAULT_FRAME: FrameSettings = {
   fontSize: 15,
   lineHeightRatio: 1.55,
-  terminalPadding: 24,
   framePadding: 48,
   radius: 12,
   showChrome: true,
@@ -122,12 +126,12 @@ export function computeLayout(
   const charWidth = measureCharWidth(fontSize);
   const chromeHeight = chromeHeightFor(frame);
   const { baseline: offset, halfLeading } = leading(fontSize, lineHeight);
-  const contentTop = chromeHeight + frame.terminalPadding;
+  const contentTop = chromeHeight + TERMINAL_PADDING;
 
   const lines: LaidLine[] = renderLines.map((line, index) => {
     const top = contentTop + index * lineHeight;
     const spans: LaidSpan[] = [];
-    let x = frame.terminalPadding;
+    let x = TERMINAL_PADDING;
     for (const span of line.spans) {
       if (span.text.length === 0) continue;
       const style = resolveStyle(span.marks, span.role, theme);
@@ -140,7 +144,7 @@ export function computeLayout(
 
   const widest = lines.reduce((max, line) => {
     const last = line.spans[line.spans.length - 1];
-    return Math.max(max, last ? last.x + last.width - frame.terminalPadding : 0);
+    return Math.max(max, last ? last.x + last.width - TERMINAL_PADDING : 0);
   }, 0);
 
   const titleWidth = frame.showChrome && frame.title ? measureWidth(frame.title, fontSize * 0.85, false, false) : 0;
@@ -148,14 +152,14 @@ export function computeLayout(
   const chromeMinimum = titleWidth > 0 ? titleWidth + chromeHeight * 3 : 0;
 
   const contentWidth = Math.ceil(
-    Math.max(widest, frame.minColumns * charWidth, chromeMinimum - 2 * frame.terminalPadding),
+    Math.max(widest, frame.minColumns * charWidth, chromeMinimum - 2 * TERMINAL_PADDING),
   );
 
   const terminal: Rect = {
     x: frame.framePadding,
     y: frame.framePadding,
-    width: contentWidth + frame.terminalPadding * 2,
-    height: chromeHeight + frame.terminalPadding * 2 + Math.max(1, lines.length) * lineHeight,
+    width: contentWidth + TERMINAL_PADDING * 2,
+    height: chromeHeight + TERMINAL_PADDING * 2 + Math.max(1, lines.length) * lineHeight,
   };
 
   return {
@@ -184,7 +188,7 @@ export function trafficLights(layout: Layout, frame: FrameSettings): TrafficLigh
   const r = Math.max(4, Math.round(frame.fontSize * 0.38));
   const cy = layout.terminal.y + layout.chromeHeight / 2;
   const gap = r * 3.4;
-  const startX = layout.terminal.x + frame.terminalPadding + r;
+  const startX = layout.terminal.x + TERMINAL_PADDING + r;
   return ["#ff5f57", "#febc2e", "#28c840"].map((fill, index) => ({
     cx: startX + index * gap,
     cy,

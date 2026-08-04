@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Editor, Range } from "slate";
 import { ReactEditor, useSlate } from "slate-react";
@@ -18,21 +18,8 @@ export function FloatingToolbar({ theme }: { theme: Theme }) {
   const editor = useSlate();
   const ref = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(false);
-  const [, tick] = useState(0);
 
-  // The anchor moves with the page, and the editor only re-renders on its own
-  // changes — so scrolling or resizing has to nudge the position itself.
-  useEffect(() => {
-    const reposition = () => tick((value) => value + 1);
-    window.addEventListener("scroll", reposition, true);
-    window.addEventListener("resize", reposition);
-    return () => {
-      window.removeEventListener("scroll", reposition, true);
-      window.removeEventListener("resize", reposition);
-    };
-  }, []);
-
-  useEffect(() => {
+  const sync = useCallback(() => {
     const element = ref.current;
     if (!element) return;
 
@@ -43,6 +30,16 @@ export function FloatingToolbar({ theme }: { theme: Theme }) {
       !ReactEditor.isFocused(editor) ||
       Editor.string(editor, selection) === ""
     ) {
+      setVisible(false);
+      return;
+    }
+
+    // The model can outlive what's actually highlighted — Slate keeps its last
+    // selection when focus leaves, and a browser can drop the native one without
+    // telling it. Trust the DOM for "is anything still selected", so the toolbar
+    // never hangs around over nothing.
+    const domSelection = window.getSelection();
+    if (!domSelection || domSelection.rangeCount === 0 || domSelection.isCollapsed) {
       setVisible(false);
       return;
     }
@@ -66,7 +63,33 @@ export function FloatingToolbar({ theme }: { theme: Theme }) {
     const top = above > GAP ? above : rect.bottom + GAP;
     element.style.left = `${left + window.scrollX}px`;
     element.style.top = `${top + window.scrollY}px`;
-  });
+  }, [editor]);
+
+  // Every editor change — which is what keeps the toolbar over the selection.
+  useEffect(sync);
+
+  useEffect(() => {
+    // Scrolling and resizing move the anchor without changing the editor.
+    //
+    // Losing focus is the one that actually bites: blurring the editor produces
+    // no Slate operation, so `useSlate` never re-renders us and the toolbar
+    // outlives the selection it belongs to — it just sits there after you click
+    // away. Focus events are deferred a frame because slate-react clears its own
+    // focus flag in a handler that has not necessarily run yet.
+    const soon = () => requestAnimationFrame(sync);
+    window.addEventListener("scroll", sync, true);
+    window.addEventListener("resize", sync);
+    document.addEventListener("selectionchange", sync);
+    window.addEventListener("focusin", soon);
+    window.addEventListener("blur", soon, true);
+    return () => {
+      window.removeEventListener("scroll", sync, true);
+      window.removeEventListener("resize", sync);
+      document.removeEventListener("selectionchange", sync);
+      window.removeEventListener("focusin", soon);
+      window.removeEventListener("blur", soon, true);
+    };
+  }, [sync]);
 
   return createPortal(
     <div
@@ -74,7 +97,10 @@ export function FloatingToolbar({ theme }: { theme: Theme }) {
       className={`floating-toolbar${visible ? " floating-toolbar--visible" : ""}`}
       role="group"
       aria-label="Formatting"
-      aria-hidden={!visible}
+      // Parked off-screen at opacity 0 rather than `display: none`, so it stays
+      // measurable — but that leaves three dozen buttons in the tab order. `inert`
+      // takes them out of it and out of the a11y tree without costing the layout.
+      inert={!visible}
     >
       <Toolbar theme={theme} />
     </div>,

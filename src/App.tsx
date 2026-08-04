@@ -17,7 +17,13 @@ import {
   renderBlob,
   type ImageFormat,
 } from "./export/index.ts";
-import { DEFAULT_FRAME, computeLayout, trafficLights, type FrameSettings } from "./export/layout.ts";
+import {
+  DEFAULT_FRAME,
+  TERMINAL_PADDING,
+  computeLayout,
+  trafficLights,
+  type FrameSettings,
+} from "./export/layout.ts";
 import { CHROME_TITLE_SCALE, SHADOW, chromeBorderColor, chromeTitleColor } from "./export/scene.ts";
 import { Logo } from "./ui/Logo.tsx";
 import { Sidebar } from "./ui/Sidebar.tsx";
@@ -204,7 +210,7 @@ export function App() {
             <Logo />
           </span>
           <span className="brand__name">Boron</span>
-          <span className="brand__tagline">terminal blocks, worth screenshotting</span>
+          <span className="brand__tagline">gorgeous editable terminal screenshots</span>
         </div>
 
         <div className="export-bar">
@@ -241,7 +247,7 @@ export function App() {
             Copy image
           </button>
           <button type="button" className="button button--primary" onClick={handleDownload} disabled={!scene}>
-            Save {format.toUpperCase()}
+            Save image
           </button>
         </div>
       </header>
@@ -253,6 +259,7 @@ export function App() {
 
             <div className="stage" ref={stageRef}>
               {layout ? (
+                <>
                 <div
                   className="frame-fit"
                   style={{ width: layout.width * previewScale, height: layout.height * previewScale }}
@@ -319,12 +326,14 @@ export function App() {
                       fontSize={frame.fontSize}
                       lineHeight={layout.lineHeight}
                       halfLeading={layout.halfLeading}
-                      padding={frame.terminalPadding}
+                      padding={TERMINAL_PADDING}
                       width={layout.terminal.width}
                     />
                   </div>
                 </div>
                 </div>
+                <p className="stage__caption">Edit above or try copy/pasting from your terminal.</p>
+                </>
               ) : (
                 <p className="stage__loading">Loading font…</p>
               )}

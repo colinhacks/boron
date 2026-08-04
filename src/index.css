@@ -268,13 +268,22 @@ input {
   min-height: 0;
   overflow: auto;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 16px;
   padding: 24px;
 }
 
 .stage__loading {
   color: var(--text-faint);
+}
+
+.stage__caption {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-align: center;
 }
 
 .frame-fit {
@@ -313,9 +322,16 @@ input {
   outline: none;
 }
 
+/*
+ * Translucent, unlike a real terminal's opaque selection. A fill is applied to
+ * the run you have selected, so an opaque highlight would paint over the very
+ * colour you are picking and the swatch would look like it did nothing until
+ * you clicked away. Letting the fill read through is worth more here than
+ * matching a terminal exactly.
+ */
 .terminal-editable::selection,
 .terminal-editable *::selection {
-  background-color: var(--boron-selection);
+  background-color: color-mix(in srgb, var(--boron-selection) 45%, transparent);
 }
 
 .terminal-line {
@@ -609,14 +625,91 @@ input[type="range"]::-webkit-slider-thumb {
   transform: translate(-50%, 0);
 }
 
+/*
+ * Narrow: the sidebar moves under the stage, and the PAGE scrolls rather than
+ * each pane scrolling itself.
+ *
+ * That second half is the load-bearing part. Stacked, the sidebar's row is
+ * `auto` and its natural height is well over a thousand pixels — inside a
+ * `height: 100%` flex column that row takes everything and starves the stage's
+ * `1fr` down to a sliver, which is exactly what a phone was showing. Releasing
+ * the fixed height lets both rows take the space they need.
+ */
 @media (max-width: 980px) {
+  html,
+  body,
+  #root {
+    height: auto;
+  }
+
+  .app {
+    height: auto;
+    min-height: 100%;
+  }
+
   .app-main {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+  }
+
+  .stage {
+    min-height: 40vh;
+    overflow: visible;
+    padding: 18px;
   }
 
   .sidebar {
     border-left: none;
     border-top: 1px solid var(--border);
+    overflow-y: visible;
+  }
+}
+
+/* Phone: nothing in the header row fits beside the brand any more. */
+@media (max-width: 720px) {
+  .app-header {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+
+  .brand {
+    flex: 1 0 100%;
+  }
+
+  /* Four control groups still overflow 390px. Scroll the row instead of letting
+     it push the whole document wider than the viewport. */
+  .export-bar {
+    flex: 1 0 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .export-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .export-bar > * {
+    flex: none;
+  }
+
+  .stage-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px 14px 16px;
+  }
+
+  .stage-footer__actions {
+    flex-wrap: wrap;
+  }
+
+  .sidebar {
+    padding: 14px 14px 32px;
+  }
+
+  /* The swatch rows already wrap — they just need a ceiling to wrap against. */
+  .floating-toolbar {
+    max-width: calc(100vw - 16px);
   }
 }
