@@ -1,5 +1,4 @@
 import { blend, relativeLuminance } from "./palette.ts";
-import type { Marks } from "./types.ts";
 
 export interface Theme {
   id: string;
@@ -11,15 +10,6 @@ export interface Theme {
   foreground: string;
   /** The sixteen ANSI colors, in chalk-name order. */
   ansi: readonly string[];
-  /**
-   * The mark a command run wears when it has no explicit color of its own.
-   *
-   * This is a real chalk mark rather than a hand-picked hex, because the whole
-   * point of the tool is that what you see can be reproduced in a terminal. On
-   * a dark profile that is bright white (SGR 97); on a light one bright white
-   * *is* the background, so the readable equivalent is black (SGR 30).
-   */
-  commandMark: Marks;
   /** Text selection highlight inside the editor. Chrome only, never exported. */
   selection: string;
 }
@@ -30,9 +20,14 @@ interface ThemeSpec {
   background: string;
   foreground: string;
   ansi: readonly string[];
-  commandMark?: Marks;
 }
 
+/**
+ * A theme is a *palette*, nothing more — it decides what `red` looks like, the
+ * way a terminal profile does. It deliberately has no say in which marks a run
+ * carries, so the escape sequence a document serializes to is the same whatever
+ * theme happens to be selected.
+ */
 function makeTheme(spec: ThemeSpec): Theme {
   const isLight = relativeLuminance(spec.background) > 0.4;
   return {
@@ -42,7 +37,6 @@ function makeTheme(spec: ThemeSpec): Theme {
     background: spec.background,
     foreground: spec.foreground,
     ansi: spec.ansi,
-    commandMark: spec.commandMark ?? (isLight ? { fg: "black" } : { fg: "whiteBright" }),
     selection: blend(spec.foreground, spec.background, isLight ? 0.7 : 0.75),
   };
 }
@@ -128,28 +122,11 @@ export const THEMES: readonly Theme[] = [
       "#586e75", "#cb4b16", "#93a1a1", "#657b83", "#839496", "#6c71c4", "#93a1a1", "#fdf6e3",
     ],
   }),
-  makeTheme({
-    id: "solarized-light",
-    name: "Solarized Light",
-    background: "#fdf6e3",
-    foreground: "#586e75",
-    ansi: [
-      "#073642", "#dc322f", "#859900", "#b58900", "#268bd2", "#d33682", "#2aa198", "#eee8d5",
-      "#002b36", "#cb4b16", "#93a1a1", "#657b83", "#839496", "#6c71c4", "#93a1a1", "#fdf6e3",
-    ],
-  }),
-  makeTheme({
-    id: "github-light",
-    name: "GitHub Light",
-    background: "#ffffff",
-    foreground: "#24292f",
-    ansi: [
-      "#24292f", "#cf222e", "#116329", "#4d2d00", "#0969da", "#8250df", "#1b7c83", "#6e7781",
-      "#57606a", "#a40e26", "#1a7f37", "#633c01", "#218bff", "#a475f9", "#3192aa", "#8c959f",
-    ],
-  }),
 ];
 
+// Every shipped theme is currently a dark profile. `isLight` is kept — it is
+// derived, and the light-background handling it drives stays correct — so a
+// light theme is a palette away.
 export const DEFAULT_THEME = THEMES[0]!;
 
 export function themeById(id: string): Theme {

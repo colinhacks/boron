@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, type CSSProperties, type KeyboardEvent } from "react";
 import { Editable, type RenderElementProps, type RenderLeafProps } from "slate-react";
-import { colorToCss, resolveStyle } from "../core/style.ts";
+import { resolveStyle } from "../core/style.ts";
 import { DEFAULT_THEME, type Theme } from "../core/themes.ts";
 import type { Marks, SpanRole } from "../core/types.ts";
 import { FONT_FAMILY } from "../export/fonts.ts";
@@ -129,7 +129,7 @@ export function TerminalSurface({
           fontFamily: FONT_FAMILY,
           fontSize,
           lineHeight: `${lineHeight}px`,
-          caretColor: theme.commandMark.fg ? colorToCss(theme.commandMark.fg, theme) : theme.foreground,
+          caretColor: theme.foreground,
           // Terminals do not reflow, and neither does the exported image — so
           // override Slate's default `pre-wrap` to keep the two in agreement.
           whiteSpace: "pre",

@@ -23,15 +23,20 @@ export function colorToCss(color: Color, theme: Theme): string {
 /**
  * The chalk marks the `$`-prompt heuristic *implies* for a run.
  *
- * Deliberately expressed as marks rather than as colors: everything Boron draws
- * has to be reproducible in a real terminal, so the automatic styling is the
- * same vocabulary as the toolbar — a command is bright white (SGR 97) and
- * output is faint (SGR 2), not some private blend with no escape code.
+ * Expressed as marks rather than as colors, and independent of the theme: a
+ * command is bold (SGR 1) and output is faint (SGR 2), everywhere. Picking the
+ * mark per theme — bright white on dark profiles, black on light ones — would
+ * make one document serialize to two different escape sequences, and there is
+ * only one correct answer for a given document.
+ *
+ * Bold rather than bright white because it is the one emphasis that stays
+ * legible against any palette — including light profiles, where bright white
+ * *is* the background.
  */
-export function roleMarks(role: SpanRole, theme: Theme): Marks {
+export function roleMarks(role: SpanRole): Marks {
   switch (role) {
     case "command":
-      return theme.commandMark;
+      return { bold: true };
     case "prompt":
     case "output":
       return { dim: true };
@@ -46,10 +51,10 @@ export function roleMarks(role: SpanRole, theme: Theme): Marks {
  * is the fallback for *uncolored* output, not a filter over everything. That is
  * what lets pasted ANSI stay vivid while plain output recedes.
  */
-export function effectiveMarks(marks: Marks, role: SpanRole, theme: Theme): Marks {
-  const implied = roleMarks(role, theme);
+export function effectiveMarks(marks: Marks, role: SpanRole): Marks {
+  const implied = roleMarks(role);
   if (marks.fg !== undefined) {
-    const { dim: _dim, fg: _fg, ...rest } = implied;
+    const { dim: _dim, ...rest } = implied;
     return { ...rest, ...marks };
   }
   return { ...implied, ...marks };
@@ -60,7 +65,7 @@ export function effectiveMarks(marks: Marks, role: SpanRole, theme: Theme): Mark
  * the SVG all call this, so what you see is what gets exported.
  */
 export function resolveStyle(marks: Marks, role: SpanRole, theme: Theme): ResolvedStyle {
-  const effective = effectiveMarks(marks, role, theme);
+  const effective = effectiveMarks(marks, role);
 
   let color = effective.fg !== undefined ? colorToCss(effective.fg, theme) : theme.foreground;
   let background = effective.bg !== undefined ? colorToCss(effective.bg, theme) : null;

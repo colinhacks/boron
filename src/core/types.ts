@@ -51,10 +51,8 @@ export interface Marks {
 }
 
 /**
- * The modifiers the toolbar offers. `hidden` (SGR 8) is deliberately absent:
- * it is "not widely supported" and renders text invisible, which is of no use
- * in a tool for designing terminal output. It stays in `Marks` so that pasted
- * content carrying SGR 8 still round-trips faithfully.
+ * Every modifier that is exactly one SGR code, and nothing else. Membership is
+ * decided by that correspondence alone — not by how many emulators honour it.
  */
 export const MODIFIER_KEYS = [
   "bold",
@@ -63,6 +61,7 @@ export const MODIFIER_KEYS = [
   "underline",
   "strikethrough",
   "inverse",
+  "hidden",
 ] as const;
 
 export type ModifierKey = (typeof MODIFIER_KEYS)[number];

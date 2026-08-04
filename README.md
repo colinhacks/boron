@@ -37,9 +37,7 @@ The wrapper color a terminal puts on its clipboard is treated as *unstyled*, not
 
 Only when a paste carries no styling at all does it fall through to plain text and the `$` heuristic.
 
-**Select and recolor.** Highlight any run and apply a chalk color or modifier. Every control names its chalk method and SGR code in its tooltip. `⌘B`, `⌘I`, `⌘U` and `⌘\` (clear) work as you'd expect.
-
-Being a real SGR code is not the same as being honoured everywhere, so the three modifiers that aren't carry a `°` and say why on hover: **italic** (SGR 3) is not widely supported and some terminals show inverse or blink instead, **strike** (SGR 9) does nothing in macOS Terminal.app, and **dim** (SGR 2) is widely supported but rendered as a lighter weight by some. Bold, underline and inverse are safe anywhere. `hidden` (SGR 8) is not offered at all — it is not widely supported and renders text invisible, which is no use for designing output; pasted content carrying it still round-trips.
+**Select and recolor.** Highlight any run and apply a chalk color, fill or modifier. The toolbar's contents are decided by exactly one rule: a control exists if and only if it is exactly one SGR code. Sixteen foregrounds (SGR 30-37, 90-97), sixteen fills (40-47, 100-107), and bold, dim, italic, underline, strike, inverse and hidden (SGR 1, 2, 3, 4, 9, 7, 8). Each tooltip names the chalk method and the code. `⌘B`, `⌘I`, `⌘U` and `⌘\` (clear) work as you'd expect.
 
 **Export.** PNG, SVG, JPEG and WebP at 1×–3×, plus copy-to-clipboard. Or copy the block back out as raw ANSI, as a runnable `chalk` snippet, or as plain text — which is the point of the tool: mock up what you want a program to print, then hand an agent the escape sequence to reproduce.
 
@@ -54,9 +52,9 @@ src/ui/       toolbar, sidebar, sample document
 
 Two decisions carry most of the weight.
 
-**The automatic styling is marks, not colors.** `core/style.ts` merges the marks a run's role *implies* (a command is `whiteBright`, output is `dim`) with the marks it explicitly carries. Explicit always wins, and a run with its own color keeps full intensity so pasted color stays vivid while plain output recedes. The editor's leaves, the canvas renderer, the SVG renderer and the ANSI serializer all go through that one function, so they cannot disagree. `serialize.test.ts` pins this down: render → ANSI → parse → render is compared character by character across six documents and two themes.
+**The automatic styling is marks, not colors.** `core/style.ts` merges the marks a run's role *implies* (a command is `bold`, output is `dim`) with the marks it explicitly carries. Explicit always wins, and a run with its own color keeps full intensity so pasted color stays vivid while plain output recedes. The editor's leaves, the canvas renderer, the SVG renderer and the ANSI serializer all go through that one function, so they cannot disagree. `serialize.test.ts` pins this down: render → ANSI → parse → render is compared character by character across six documents and two palettes.
 
-Because the role marks are real, they are theme-aware where they have to be. Bright white on a light profile *is* the background, so light themes imply `black` (SGR 30) for commands instead — which is what a real terminal on that profile would need too.
+**A theme is a palette, not a style.** It decides what `red` looks like, exactly as a terminal profile does, and has no say in which marks a run carries — so `toAnsi` takes no theme at all and one document has one correct serialization. That is also why a command is `bold` rather than bright white: bold is legible against any palette, while bright white *is* the background on a light profile.
 
 **Export lays itself out.** A terminal is a fixed-advance grid, so `export/layout.ts` measures runs once and both renderers consume the result — the canvas draws it and the SVG positions every run at the same measured `x`, with the font embedded. No DOM screenshotting, so there is no `foreignObject` fidelity or font-embedding lottery, and the editor is sized from the same layout it exports.
 

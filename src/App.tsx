@@ -19,8 +19,9 @@ import {
 } from "./export/index.ts";
 import { DEFAULT_FRAME, computeLayout, trafficLights, type FrameSettings } from "./export/layout.ts";
 import { CHROME_TITLE_SCALE, SHADOW, chromeBorderColor, chromeTitleColor } from "./export/scene.ts";
+import { Logo } from "./ui/Logo.tsx";
 import { Sidebar } from "./ui/Sidebar.tsx";
-import { Toolbar } from "./ui/Toolbar.tsx";
+import { FloatingToolbar } from "./ui/FloatingToolbar.tsx";
 import { sampleDocument } from "./ui/sample.ts";
 
 const STORAGE_KEY = "boron.workspace.v1";
@@ -171,10 +172,10 @@ export function App() {
     async (kind: "ansi" | "text" | "chalk") => {
       const serialized =
         kind === "ansi"
-          ? toAnsi(renderLines, theme)
+          ? toAnsi(renderLines)
           : kind === "text"
             ? toPlainText(renderLines)
-            : toChalkSource(renderLines, theme);
+            : toChalkSource(renderLines);
       try {
         await copyText(serialized);
         flash(kind === "ansi" ? "ANSI copied" : kind === "text" ? "Text copied" : "chalk source copied");
@@ -182,7 +183,7 @@ export function App() {
         flash("Clipboard blocked");
       }
     },
-    [renderLines, theme, flash],
+    [renderLines, flash],
   );
 
   const resetDocument = useCallback(() => {
@@ -199,8 +200,8 @@ export function App() {
     <div className="app">
       <header className="app-header">
         <div className="brand">
-          <span className="brand__mark" aria-hidden="true">
-            ▚
+          <span className="brand__mark">
+            <Logo />
           </span>
           <span className="brand__name">Boron</span>
           <span className="brand__tagline">terminal blocks, worth screenshotting</span>
@@ -248,7 +249,7 @@ export function App() {
       <Slate editor={editor} initialValue={initialValue} onChange={handleChange}>
         <main className="app-main">
           <div className="workspace">
-            <Toolbar theme={theme} />
+            <FloatingToolbar theme={theme} />
 
             <div className="stage" ref={stageRef}>
               {layout ? (
@@ -335,7 +336,12 @@ export function App() {
                 output. Paste real terminal output — ANSI escapes and rich text keep their colors.
               </p>
               <div className="stage-footer__actions">
-                <button type="button" className="chip" onClick={() => copyAs("ansi")}>
+                <button
+                  type="button"
+                  className="chip chip--accent"
+                  title="Plain text with the escape sequences inlined — paste into a terminal or an agent"
+                  onClick={() => copyAs("ansi")}
+                >
                   Copy ANSI
                 </button>
                 <button type="button" className="chip" onClick={() => copyAs("chalk")}>

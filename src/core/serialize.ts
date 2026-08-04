@@ -1,6 +1,5 @@
 import { namedColorIndex, parseAnsi256, parseCssColor } from "./palette.ts";
 import { effectiveMarks } from "./style.ts";
-import type { Theme } from "./themes.ts";
 import { isNamedColor, type Color, type Marks, type RenderLine } from "./types.ts";
 
 const ESC = "\u001b";
@@ -47,14 +46,19 @@ export function toPlainText(lines: readonly RenderLine[]): string {
   return lines.map((line) => line.spans.map((span) => span.text).join("")).join("\n");
 }
 
-/** Terminal-ready text with escape sequences — paste this straight into a shell. */
-export function toAnsi(lines: readonly RenderLine[], theme: Theme): string {
+/**
+ * Terminal-ready text with escape sequences — paste this straight into a shell.
+ *
+ * A pure function of the document: no theme, because the theme is only a
+ * palette. One document has exactly one correct serialization.
+ */
+export function toAnsi(lines: readonly RenderLine[]): string {
   return lines
     .map((line) =>
       line.spans
         .map((span) => {
           if (span.text.length === 0) return "";
-          const codes = markCodes(effectiveMarks(span.marks, span.role, theme));
+          const codes = markCodes(effectiveMarks(span.marks, span.role));
           if (codes.length === 0) return span.text;
           return `${ESC}[${codes.join(";")}m${span.text}${RESET}`;
         })
@@ -89,13 +93,13 @@ function chalkChain(marks: Marks): string[] {
 }
 
 /** A runnable chalk snippet — the fastest way to hand a mockup to an agent. */
-export function toChalkSource(lines: readonly RenderLine[], theme: Theme): string {
+export function toChalkSource(lines: readonly RenderLine[]): string {
   const body = lines
     .map((line) => {
       const parts = line.spans
         .filter((span) => span.text.length > 0)
         .map((span) => {
-          const chain = chalkChain(effectiveMarks(span.marks, span.role, theme));
+          const chain = chalkChain(effectiveMarks(span.marks, span.role));
           const literal = JSON.stringify(span.text);
           return chain.length === 0 ? literal : `chalk.${chain.join(".")}(${literal})`;
         });
