@@ -1,5 +1,7 @@
 # Boron
 
+[boron.sh](https://boron.sh)
+
 A carbon.now.sh for **terminal** blocks. Compose a terminal session, keep its colors, export it as an image.
 
 Everything Boron can draw is representable in a real terminal. That is the constraint the whole design hangs off: the palette is chalk's sixteen named colors, the modifiers are chalk's modifiers, and even the automatic styling is expressed as chalk marks rather than as hand-picked hex — so the picture you compose and the escape sequence you copy out are the same thing.
