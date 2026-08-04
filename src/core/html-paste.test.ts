@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { GHOSTTY_1_3_1 } from "./clipboard-fixtures.ts";
 import { parseHtmlClipboard } from "./html-paste.ts";
 import { DEFAULT_THEME } from "./themes.ts";
 
@@ -86,5 +87,48 @@ describe("parseHtmlClipboard", () => {
     const html =
       '<div style="background-color:#1e1e1e"><span style="background-color:#1e1e1e; color:#cd3131">x</span></div>';
     expect(shape(html)).toEqual([[["x", { fg: "red" }]]]);
+  });
+
+  it("keeps a run inline when the element says so, whatever its tag", () => {
+    const html = '<div style="white-space: pre;"><div style="display: inline; color:#0dbc79">a</div>b</div>';
+    expect(shape(html)).toEqual([[["a", { fg: "green" }], ["b", {}]]]);
+  });
+
+  it("breaks a line on a <span> that declares itself a block", () => {
+    expect(shape('<span style="display: block; color:#cd3131">a</span><span style="color:#0dbc79">b</span>')).toEqual([
+      [["a", { fg: "red" }]],
+      [["b", { fg: "green" }]],
+    ]);
+  });
+
+  it("drops a display: none run rather than inlining its text", () => {
+    const html = '<div><span style="color:#0dbc79">a</span><span style="display:none">hidden</span></div>';
+    expect(shape(html)).toEqual([[["a", { fg: "green" }]]]);
+  });
+
+  it("keeps a Ghostty row on one line instead of splitting it per styled run", () => {
+    const lines = parseHtmlClipboard(GHOSTTY_1_3_1, ansi16)!;
+    expect(lines.map((line) => line.spans.map((span) => span.text).join(""))).toEqual([
+      "FRAY v0.1.5  ready in 2.9s",
+      "",
+      "  ➜  Local:   http://127.0.0.1:4919/",
+      "   RED BG  plain italic strike",
+      "256color truecolor trailing-plain",
+    ]);
+  });
+
+  it("reads every mark Ghostty encodes onto a run", () => {
+    const lines = parseHtmlClipboard(GHOSTTY_1_3_1, ansi16)!;
+    const marksFor = (text: string) =>
+      lines.flatMap((line) => line.spans).find((span) => span.text === text)?.marks;
+
+    expect(marksFor("FRAY")).toEqual({ fg: "#b294bb", bold: true });
+    expect(marksFor("v0.1.5")).toEqual({ dim: true });
+    expect(marksFor("Local:")).toEqual({ bold: true });
+    expect(marksFor("http://127.0.0.1:4919/")).toEqual({ fg: "#8abeb7", underline: true });
+    expect(marksFor(" RED BG ")).toEqual({ fg: "whiteBright", bg: "#cc6666" });
+    expect(marksFor("italic")).toEqual({ italic: true });
+    expect(marksFor("strike")).toEqual({ strikethrough: true });
+    expect(marksFor(" trailing-plain")).toEqual({});
   });
 });

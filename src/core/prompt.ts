@@ -20,6 +20,21 @@ const PROMPT_RE = new RegExp(
   `^[ \\t]*(?:\\S{0,80}?[${MARKERS}]|\\S{1,80}[ \\t]+[${MARKERS}])(?:[ \\t]+|$)`,
 );
 
+/**
+ * oh-my-zsh's robbyrussell prompt leads with `➜`, but so does a whole genre of
+ * CLI *output* — vite, pnpm and friends print `➜` as a bullet. Column tells them
+ * apart: a prompt owns the start of its line, while a decorative arrow is
+ * indented under the thing it belongs to. So `➜` counts only at column 0, with
+ * no leading whitespace allowed.
+ *
+ * Unlike `$` and `❯`, this marker comes *first* — the directory and git status
+ * follow it (`➜  fray git:(main) ✗ nub test`) rather than preceding it. There is
+ * no reliable way to find where that chrome ends, so only the arrow itself is
+ * treated as chrome. In a real paste the rest carries oh-my-zsh's own colors,
+ * and an explicit color already outranks the role styling.
+ */
+const OMZ_PROMPT_RE = /^➜(?:[ \t]+|$)/;
+
 export type LineKind = "command" | "output";
 
 export interface LineClassification {
@@ -39,7 +54,7 @@ export interface LineClassification {
  * `${FOO}` out — a variable is never followed by a space at that position.
  */
 export function matchPrompt(text: string): number {
-  const match = PROMPT_RE.exec(text);
+  const match = PROMPT_RE.exec(text) ?? OMZ_PROMPT_RE.exec(text);
   return match ? match[0].length : -1;
 }
 

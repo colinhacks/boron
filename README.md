@@ -1,6 +1,8 @@
-# Boron
-
-[boron.sh](https://boron.sh)
+<div align="center">
+  <img src="public/mark.svg" alt="" width="76" height="76">
+  <h1>Boron</h1>
+  <p><a href="https://boron.sh">boron.sh</a></p>
+</div>
 
 A carbon.now.sh for **terminal** blocks. Compose a terminal session, keep its colors, export it as an image.
 
@@ -26,10 +28,16 @@ nub run dev
 
 The heuristic is deliberately narrow. `$HOME`, `$(date)` and `cost is 5$ each` are not prompts, and `>`, `#` and `%` are not markers — they collide with diffs, comments and percentages far more often in real output than in real prompts.
 
+oh-my-zsh's `➜` counts too, but only at column 0. The same character is what vite, pnpm and friends bullet their *output* with, and the two are told apart by position: a prompt owns the start of its line, while a decorative arrow is indented under the thing it belongs to. `➜` also leads its prompt rather than closing it — the directory and git status come after — so only the arrow itself is treated as chrome.
+
 **Paste keeps its colors.** Paste terminal output and Boron reads whatever styling came with it:
 
 - **ANSI escapes** in `text/plain` — the full SGR set, including 256-color and truecolor in both the `;` and `:` forms, plus `\r`, `\b` and erase-line, so a pasted progress bar collapses to its final frame instead of smearing.
-- **Rich text** in `text/html` — what iTerm2, VS Code's terminal and friends put on the clipboard. Colors are mapped back onto *named* palette entries where they match a known terminal palette, so a pasted green stays `green` and re-themes with the rest of the block instead of freezing as one terminal's hex.
+- **Rich text** in `text/html`. Colors are mapped back onto *named* palette entries where they match a known terminal palette, so a pasted green stays `green` and re-themes with the rest of the block instead of freezing as one terminal's hex.
+
+  Fewer terminals write this flavor than you would guess, and the ones that do disagree about how. Ghostty writes it by default since 1.3.0 and marks every styled run as a `<div style="display: inline">`, with rows separated by literal newlines under `white-space: pre`. Konsole writes it by default too, but as an XHTML document with a `<br>` after every row. VTE (GNOME Terminal, Tilix) and VS Code's terminal can, behind an explicit "Copy as HTML" action, and Windows Terminal behind `copyFormatting` — those two put one block element per *row*. Reading a `display` declaration rather than trusting the tag is what keeps Ghostty's per-run `<div>`s from becoming one line each.
+
+  iTerm2, macOS Terminal.app, kitty, WezTerm and Alacritty never write HTML at all — a copy from those is plain text, and lands on the ANSI or `$` path below. `src/core/clipboard-fixtures.ts` holds payloads captured off a real pasteboard, which is the only honest way to test this.
 
 ANSI wins over rich text when both are present, because SGR codes name their colors while HTML has already resolved them.
 

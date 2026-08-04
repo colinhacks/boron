@@ -8,6 +8,16 @@ const BLOCK_TAGS = new Set([
   "header", "hr", "li", "main", "nav", "ol", "p", "pre", "section", "table", "tr", "ul",
 ]);
 
+// A `display` declaration outranks the tag's default. Ghostty writes every
+// styled run as a `<div style="display: inline">`, so going by the tag alone
+// would break a line at every color change instead of at every terminal row.
+const INLINE_DISPLAYS = new Set([
+  "inline", "inline-block", "inline-flex", "inline-grid", "inline-table", "contents", "ruby",
+]);
+const BLOCK_DISPLAYS = new Set([
+  "block", "flex", "grid", "flow-root", "list-item", "table", "table-row",
+]);
+
 interface Inherited {
   color: string | null;
   background: string | null;
@@ -47,7 +57,7 @@ function normalizeColor(value: string | undefined): string | null {
  * Read what a terminal's clipboard HTML says about one element, layered on top
  * of what it inherited.
  */
-function descend(element: Element, parent: Inherited): Inherited {
+function descend(element: Element, parent: Inherited, declarations: Declarations): Inherited {
   const next: Inherited = { ...parent };
   const tag = element.tagName.toLowerCase();
 
@@ -59,8 +69,6 @@ function descend(element: Element, parent: Inherited): Inherited {
 
   const fontColor = element.getAttribute("color");
   if (fontColor) next.color = normalizeColor(fontColor) ?? next.color;
-
-  const declarations = parseInlineStyle(element.getAttribute("style") ?? "");
 
   const color = normalizeColor(declarations["color"]);
   if (color) next.color = color;
@@ -156,10 +164,14 @@ function walk(node: Node, style: Inherited, collector: Collector, defaults: Defa
     return;
   }
 
-  const isBlock = BLOCK_TAGS.has(tag);
+  const declarations = parseInlineStyle(element.getAttribute("style") ?? "");
+  const display = (declarations["display"] ?? "").trim().toLowerCase();
+  if (display === "none") return;
+
+  const isBlock = INLINE_DISPLAYS.has(display) ? false : BLOCK_DISPLAYS.has(display) || BLOCK_TAGS.has(tag);
   if (isBlock && collector.current.length > 0) breakLine(collector);
 
-  const next = descend(element, style);
+  const next = descend(element, style, declarations);
   for (const child of Array.from(element.childNodes)) walk(child, next, collector, defaults);
 
   if (isBlock && collector.current.length > 0) breakLine(collector);

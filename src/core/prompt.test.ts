@@ -24,6 +24,23 @@ describe("matchPrompt", () => {
     expect(matchPrompt("  $ ls")).toBe(4);
   });
 
+  it("matches oh-my-zsh's arrow at the start of a line", () => {
+    expect(matchPrompt("➜  ~ cd Documents")).toBe(3);
+    expect(matchPrompt("➜  fray git:(main) ✗ nub test")).toBe(3);
+    expect(matchPrompt("➜")).toBe(1);
+  });
+
+  it("rejects an indented arrow, which is CLI output rather than a prompt", () => {
+    // vite, pnpm and friends bullet their output with the same character.
+    expect(matchPrompt("  ➜  Local:   http://127.0.0.1:4919/")).toBe(-1);
+    expect(matchPrompt("    ➜ done")).toBe(-1);
+  });
+
+  it("rejects an arrow that is not a bare marker", () => {
+    expect(matchPrompt("➜➜ x")).toBe(-1);
+    expect(matchPrompt("build ➜ dist")).toBe(-1);
+  });
+
   it("rejects shell variables and substitutions", () => {
     expect(matchPrompt("$HOME/bin")).toBe(-1);
     expect(matchPrompt("$(date) is now")).toBe(-1);
