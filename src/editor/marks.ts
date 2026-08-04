@@ -38,9 +38,9 @@ export function activeMarks(editor: Editor): Marks {
   return common ?? {};
 }
 
-export function setColor(editor: Editor, key: "fg" | "bg", color: Color | null): void {
-  if (color === null) Editor.removeMark(editor, key);
-  else Editor.addMark(editor, key, color);
+export function setForeground(editor: Editor, color: Color | null): void {
+  if (color === null) Editor.removeMark(editor, "fg");
+  else Editor.addMark(editor, "fg", color);
 }
 
 export function toggleModifier(editor: Editor, key: ModifierKey): void {

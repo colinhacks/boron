@@ -37,7 +37,9 @@ The wrapper color a terminal puts on its clipboard is treated as *unstyled*, not
 
 Only when a paste carries no styling at all does it fall through to plain text and the `$` heuristic.
 
-**Select and recolor.** Highlight any run and apply a chalk color, fill or modifier. Every control names its chalk method and SGR code in its tooltip. `⌘B`, `⌘I`, `⌘U` and `⌘\` (clear) work as you'd expect.
+**Select and recolor.** Highlight any run and apply a chalk color or modifier. Every control names its chalk method and SGR code in its tooltip. `⌘B`, `⌘I`, `⌘U` and `⌘\` (clear) work as you'd expect.
+
+Being a real SGR code is not the same as being honoured everywhere, so the three modifiers that aren't carry a `°` and say why on hover: **italic** (SGR 3) is not widely supported and some terminals show inverse or blink instead, **strike** (SGR 9) does nothing in macOS Terminal.app, and **dim** (SGR 2) is widely supported but rendered as a lighter weight by some. Bold, underline and inverse are safe anywhere. `hidden` (SGR 8) is not offered at all — it is not widely supported and renders text invisible, which is no use for designing output; pasted content carrying it still round-trips.
 
 **Export.** PNG, SVG, JPEG and WebP at 1×–3×, plus copy-to-clipboard. Or copy the block back out as raw ANSI, as a runnable `chalk` snippet, or as plain text — which is the point of the tool: mock up what you want a program to print, then hand an agent the escape sequence to reproduce.
 
