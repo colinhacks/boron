@@ -350,9 +350,12 @@ input {
 
 .hint {
   margin: 0;
+  /* Take the room that's actually there. A readable measure would cap this
+     nearer 62ch, but the footer is a single row beside the copy buttons, and
+     holding the paragraph narrow only bought extra wrapped lines. */
+  flex: 1 1 auto;
   color: var(--text-faint);
   font-size: 12px;
-  max-width: 62ch;
   line-height: 1.5;
 }
 
