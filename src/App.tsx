@@ -25,6 +25,7 @@ import {
   type FrameSettings,
 } from "./export/layout.ts";
 import { CHROME_TITLE_SCALE, chromeBorderColor, chromeTitleColor, resolveShadow } from "./export/scene.ts";
+import { Credit } from "./ui/Credit.tsx";
 import { Logo } from "./ui/Logo.tsx";
 import { Sidebar } from "./ui/Sidebar.tsx";
 import { SplitButton } from "./ui/SplitButton.tsx";
@@ -342,9 +343,7 @@ export function App() {
               )}
             </div>
 
-            <a className="credit" href="https://x.com/colinhacks" target="_blank" rel="noreferrer">
-              Built by @colinhacks
-            </a>
+            <Credit />
           </div>
 
           <Sidebar
