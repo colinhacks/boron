@@ -667,9 +667,6 @@ input[type="range"]::-webkit-slider-thumb {
 .split-button__action {
   padding: 6px 11px;
   border-radius: 7px 0 0 7px;
-  /* Every label in the menu has to fit without nudging the row when it changes. */
-  min-width: 92px;
-  text-align: left;
 }
 
 .split-button__toggle {
