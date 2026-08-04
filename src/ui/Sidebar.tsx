@@ -168,7 +168,7 @@ export function Sidebar({
           onChange={(lineHeightRatio) => onFrameChange({ lineHeightRatio })}
         />
         <Slider
-          label="Outer padding"
+          label="Padding"
           value={frame.framePadding}
           min={0}
           max={140}

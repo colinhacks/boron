@@ -11,13 +11,20 @@ export const IMAGE_FORMATS: readonly { id: ImageFormat; label: string; extension
   { id: "webp", label: "WebP", extension: "webp" },
 ];
 
+/**
+ * Raster exports are drawn at 2×. A terminal block is small and mostly text, so
+ * the retina copy is the one worth having and the file is cheap either way —
+ * not worth a control of its own.
+ */
+export const EXPORT_SCALE = 2;
+
 const MIME: Record<Exclude<ImageFormat, "svg">, string> = {
   png: "image/png",
   jpeg: "image/jpeg",
   webp: "image/webp",
 };
 
-export async function renderBlob(scene: Scene, format: ImageFormat, scale: number): Promise<Blob> {
+export async function renderBlob(scene: Scene, format: ImageFormat, scale: number = EXPORT_SCALE): Promise<Blob> {
   if (format === "svg") {
     const svg = await renderToSvg(scene);
     return new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
@@ -40,7 +47,7 @@ export function downloadBlob(blob: Blob, filename: string): void {
   requestAnimationFrame(() => URL.revokeObjectURL(url));
 }
 
-export async function copyImageToClipboard(scene: Scene, scale: number): Promise<void> {
+export async function copyImageToClipboard(scene: Scene, scale: number = EXPORT_SCALE): Promise<void> {
   // Safari requires the ClipboardItem to be constructed with a promise, so the
   // write stays inside the user-gesture window.
   const item = new ClipboardItem({ "image/png": renderBlob(scene, "png", scale) });

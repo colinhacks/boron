@@ -28,6 +28,12 @@ The package manager is **`nub`**, not npm or pnpm.
 
 This is a **Vite + React** app, not Next.js. There is a root `index.html` carrying all the page metadata, the entry is `src/main.tsx`, and static files are served from `public/` verbatim.
 
+## Clipboard fixtures
+
+`src/core/clipboard-fixtures.ts` holds rich-text clipboard payloads captured **verbatim off a real system pasteboard**. Terminals disagree enough about their `text/html` flavour that invented markup only tests your imagination — Ghostty marks every styled run as a `<div style="display: inline">` while VS Code and Konsole use one block element per row, and iTerm2, Terminal.app, kitty, WezTerm and Alacritty write no HTML at all.
+
+If you need to support another terminal, capture its real bytes and add them there rather than writing markup you believe it emits.
+
 ## Brand assets
 
 Everything in `public/` — the mark, favicons, icons, the Open Graph card — is **generated**. Don't hand-edit those files; they will be overwritten.

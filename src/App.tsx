@@ -27,6 +27,7 @@ import {
 import { CHROME_TITLE_SCALE, SHADOW, chromeBorderColor, chromeTitleColor } from "./export/scene.ts";
 import { Logo } from "./ui/Logo.tsx";
 import { Sidebar } from "./ui/Sidebar.tsx";
+import { SplitButton } from "./ui/SplitButton.tsx";
 import { FloatingToolbar } from "./ui/FloatingToolbar.tsx";
 import { sampleDocument } from "./ui/sample.ts";
 
@@ -61,7 +62,14 @@ function loadPersisted(): Partial<PersistedState> {
   }
 }
 
-const SCALES = [1, 2, 3] as const;
+type CopyMode = "image" | "ansi" | "chalk" | "text";
+
+const COPY_MODES: readonly { id: CopyMode; label: string }[] = [
+  { id: "image", label: "image" },
+  { id: "ansi", label: "ANSI" },
+  { id: "chalk", label: "chalk" },
+  { id: "text", label: "text" },
+];
 
 export function App() {
   const persisted = useMemo(loadPersisted, []);
@@ -70,7 +78,7 @@ export function App() {
   const [backgroundId, setBackgroundId] = useState(() => persisted.backgroundId ?? "midnight");
   const [frame, setFrame] = useState<FrameSettings>(() => persisted.frame ?? DEFAULT_FRAME);
   const [format, setFormat] = useState<ImageFormat>("png");
-  const [scale, setScale] = useState<number>(2);
+  const [copyMode, setCopyMode] = useState<CopyMode>("image");
   const [fontsReady, setFontsReady] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [previewScale, setPreviewScale] = useState(1);
@@ -156,23 +164,23 @@ export function App() {
     if (!scene) return;
     const spec = IMAGE_FORMATS.find((candidate) => candidate.id === format)!;
     try {
-      const blob = await renderBlob(scene, format, scale);
+      const blob = await renderBlob(scene, format);
       downloadBlob(blob, `boron.${spec.extension}`);
       flash(`Saved boron.${spec.extension}`);
     } catch (error) {
       flash(error instanceof Error ? error.message : "Export failed");
     }
-  }, [scene, format, scale, flash]);
+  }, [scene, format, flash]);
 
   const handleCopyImage = useCallback(async () => {
     if (!scene) return;
     try {
-      await copyImageToClipboard(scene, scale);
+      await copyImageToClipboard(scene);
       flash("Image copied");
     } catch {
       flash("Clipboard blocked — use Save instead");
     }
-  }, [scene, scale, flash]);
+  }, [scene, flash]);
 
   const copyAs = useCallback(
     async (kind: "ansi" | "text" | "chalk") => {
@@ -191,6 +199,11 @@ export function App() {
     },
     [renderLines, flash],
   );
+
+  const handleCopy = useCallback(async () => {
+    if (copyMode === "image") await handleCopyImage();
+    else await copyAs(copyMode);
+  }, [copyMode, handleCopyImage, copyAs]);
 
   const resetDocument = useCallback(() => {
     const next = sampleDocument();
@@ -214,41 +227,30 @@ export function App() {
         </div>
 
         <div className="export-bar">
-          <div className="segmented" role="group" aria-label="Image format">
-            {IMAGE_FORMATS.map((candidate) => (
-              <button
-                key={candidate.id}
-                type="button"
-                className={`segmented__item${format === candidate.id ? " segmented__item--active" : ""}`}
-                aria-pressed={format === candidate.id}
-                onClick={() => setFormat(candidate.id)}
-              >
-                {candidate.label}
-              </button>
-            ))}
-          </div>
-
-          <div className={`segmented${format === "svg" ? " segmented--disabled" : ""}`} role="group" aria-label="Scale">
-            {SCALES.map((candidate) => (
-              <button
-                key={candidate}
-                type="button"
-                disabled={format === "svg"}
-                className={`segmented__item${scale === candidate ? " segmented__item--active" : ""}`}
-                aria-pressed={scale === candidate}
-                onClick={() => setScale(candidate)}
-              >
-                {candidate}×
-              </button>
-            ))}
-          </div>
-
-          <button type="button" className="button" onClick={handleCopyImage} disabled={!scene}>
-            Copy image
+          <button type="button" className="button button--quiet" onClick={resetDocument}>
+            Reset
           </button>
-          <button type="button" className="button button--primary" onClick={handleDownload} disabled={!scene}>
-            Save image
-          </button>
+
+          <SplitButton
+            label={`Copy ${COPY_MODES.find((candidate) => candidate.id === copyMode)!.label}`}
+            options={COPY_MODES.map((candidate) => ({ id: candidate.id, label: `Copy as ${candidate.label}` }))}
+            value={copyMode}
+            menuLabel="Choose what to copy"
+            onSelect={(id) => setCopyMode(id as CopyMode)}
+            onAction={handleCopy}
+            disabled={copyMode === "image" && !scene}
+          />
+
+          <SplitButton
+            primary
+            label={`Save ${IMAGE_FORMATS.find((candidate) => candidate.id === format)!.label}`}
+            options={IMAGE_FORMATS.map((candidate) => ({ id: candidate.id, label: `Save as ${candidate.label}` }))}
+            value={format}
+            menuLabel="Choose an image format"
+            onSelect={(id) => setFormat(id as ImageFormat)}
+            onAction={handleDownload}
+            disabled={!scene}
+          />
         </div>
       </header>
 
@@ -339,31 +341,9 @@ export function App() {
               )}
             </div>
 
-            <div className="stage-footer">
-              <p className="hint">
-                Lines starting with <code>$</code> or <code>❯</code> render as commands; everything else dims as
-                output. Paste real terminal output — ANSI escapes and rich text keep their colors.
-              </p>
-              <div className="stage-footer__actions">
-                <button
-                  type="button"
-                  className="chip chip--accent"
-                  title="Plain text with the escape sequences inlined — paste into a terminal or an agent"
-                  onClick={() => copyAs("ansi")}
-                >
-                  Copy ANSI
-                </button>
-                <button type="button" className="chip" onClick={() => copyAs("chalk")}>
-                  Copy chalk
-                </button>
-                <button type="button" className="chip" onClick={() => copyAs("text")}>
-                  Copy text
-                </button>
-                <button type="button" className="chip chip--ghost" onClick={resetDocument}>
-                  Reset
-                </button>
-              </div>
-            </div>
+            <a className="credit" href="https://x.com/colinhacks" target="_blank" rel="noreferrer">
+              Built by @colinhacks
+            </a>
           </div>
 
           <Sidebar
