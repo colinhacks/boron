@@ -166,8 +166,11 @@ export function App() {
     const spec = IMAGE_FORMATS.find((candidate) => candidate.id === format)!;
     try {
       const blob = await renderBlob(scene, format);
-      downloadBlob(blob, `boron.${spec.extension}`);
-      flash(`Saved boron.${spec.extension}`);
+      // The domain rides along in the filename, so a shared export still says
+      // where it was made once it is out of the page.
+      const filename = `boron.sh.${spec.extension}`;
+      downloadBlob(blob, filename);
+      flash(`Saved ${filename}`);
     } catch (error) {
       flash(error instanceof Error ? error.message : "Export failed");
     }

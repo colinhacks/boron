@@ -769,32 +769,40 @@ input[type="range"]::-webkit-slider-thumb {
 
 .credit {
   position: absolute;
-  left: 0;
-  right: 0;
   bottom: 14px;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
   color: var(--text-faint);
   font-size: 11.5px;
-}
-
-.credit__link {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: inherit;
   text-decoration: none;
 }
 
-.credit__link:hover {
+/* Deliberately not a flex container: this one is a sentence, and flex would
+   drop the space between "by" and the linked handle. */
+.credit--left {
+  left: 18px;
+}
+
+.credit--right {
+  right: 18px;
+  display: flex;
+  align-items: center;
+}
+
+.credit--right:hover {
   color: var(--text-dim);
 }
 
-.credit__dot {
-  opacity: 0.55;
+/* Underlined and a shade brighter than the words around it, so the handle
+   reads as the clickable part rather than the whole sentence. */
+.credit__handle {
+  color: var(--text-dim);
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.28);
+  text-underline-offset: 2px;
+}
+
+.credit__handle:hover {
+  color: var(--text);
+  text-decoration-color: currentColor;
 }
 
 .button:disabled {
