@@ -1,0 +1,42 @@
+# Working in this repo
+
+## Git
+
+**Commit straight to `main`.** No branches, no pull requests, no staging your work for review. When something is done, commit it and push it — a push deploys to [boron.sh](https://boron.sh) via Vercel, and that is fine.
+
+**Don't spend effort on git hygiene.** Atomic commits, tidy history, branch strategy — none of it matters here. Do not stop to ask whether a commit is scoped cleanly, and do not leave finished work uncommitted because the diff also touches something else.
+
+**Several agents may be working at once**, so the tree you are in probably contains edits that are not yours. That is normal and expected:
+
+- Leave other agents' changes alone. Don't revert them, don't "fix" them, and don't wait for them to finish.
+- `git add` the paths you actually worked on and commit. If someone else's in-flight change rides along, that is acceptable — it is not worth a round trip to avoid.
+- Your own files may get swept into someone else's commit before you get to them. Check `git log -- <path>` before assuming work was lost.
+- The one thing that does bite: never rewrite shared history. No `rebase`, `reset --hard`, or force-push on `main` — other agents are working from it, and rewriting it destroys their work rather than just untidying yours.
+
+## Toolchain
+
+The package manager is **`nub`**, not npm or pnpm.
+
+| Command | What it does |
+| --- | --- |
+| `nub run dev` | Vite dev server |
+| `nub run build` | `tsc --noEmit`, then a production build to `dist/` |
+| `nub run test` | Vitest |
+| `nub run typecheck` | `tsc --noEmit` alone |
+
+`nub run build` is the gate — it typechecks before bundling, so a green build covers both.
+
+This is a **Vite + React** app, not Next.js. There is a root `index.html` carrying all the page metadata, the entry is `src/main.tsx`, and static files are served from `public/` verbatim.
+
+## Brand assets
+
+Everything in `public/` — the mark, favicons, icons, the Open Graph card — is **generated**. Don't hand-edit those files; they will be overwritten.
+
+```
+node logo-concepts/build-assets.mjs   # → public/*.svg
+./logo-concepts/rasterize.sh          # → public/*.png and favicon.ico
+```
+
+The cell grid, the gaps and the color ramp live as data at the top of `build-assets.mjs`, so retuning the mark is a one-line change that propagates to every asset. `src/ui/Logo.tsx` mirrors the same geometry for the in-app header and has to be updated alongside it.
+
+Requires `rsvg-convert` (`brew install librsvg`) and ImageMagick.
