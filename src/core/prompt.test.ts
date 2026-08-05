@@ -53,9 +53,23 @@ describe("matchPrompt", () => {
     expect(matchPrompt("echo done $")).toBe(-1);
   });
 
+  it("matches a bare chevron at the start of a line", () => {
+    expect(matchPrompt("> npm install")).toBe(2);
+    expect(matchPrompt(">")).toBe(1);
+  });
+
+  it("rejects a chevron that is indented or not bare", () => {
+    // The bullets docker, npm and esbuild print, which a laxer rule would eat.
+    expect(matchPrompt("-> installed 4 packages")).toBe(-1);
+    expect(matchPrompt("=> Done in 1.2s")).toBe(-1);
+    expect(matchPrompt("  => [internal] load build definition")).toBe(-1);
+    expect(matchPrompt("  > indented")).toBe(-1);
+    expect(matchPrompt("cat foo > bar.txt")).toBe(-1);
+    expect(matchPrompt("if x > 3 then")).toBe(-1);
+  });
+
   it("rejects markers this heuristic deliberately excludes", () => {
     expect(matchPrompt("# a comment")).toBe(-1);
-    expect(matchPrompt("> quoted output")).toBe(-1);
     expect(matchPrompt("50% complete")).toBe(-1);
   });
 

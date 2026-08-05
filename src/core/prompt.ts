@@ -1,8 +1,10 @@
 /**
- * Prompt markers. `$` is the canonical one; `❯` is the only other line-start
- * character that is unambiguously a prompt in the wild. `>`, `#` and `%` are
- * deliberately excluded — they collide with diffs, comments and percentages,
- * which appear in real command *output* far more often than in prompts.
+ * Prompt markers that may ride on the end of a chrome token. `$` is the
+ * canonical one; `❯` is the only other character that is unambiguously a prompt
+ * in that position. `#` and `%` are deliberately excluded — they collide with
+ * comments and percentages, which appear in real command *output* far more
+ * often than in prompts. `>` is a prompt too, but only in the much narrower
+ * column-0 shape below.
  */
 const MARKERS = "$❯";
 
@@ -35,6 +37,22 @@ const PROMPT_RE = new RegExp(
  */
 const OMZ_PROMPT_RE = /^➜(?:[ \t]+|$)/;
 
+/**
+ * `>` — sh's continuation prompt, the Node and Python REPLs, and the shape
+ * people reach for when writing a command down by hand. It gets its own rule
+ * because it cannot go in `MARKERS`: shape 1 lets the marker ride on the end of
+ * a token, which would turn every `-> installed 4 packages` and `=> Done in
+ * 1.2s` bullet — docker, npm, esbuild — into a prompt. Requiring the `>` to be
+ * bare *and* at column 0 leaves all of those alone, along with `cat foo >
+ * bar.txt` and `if x > 3`.
+ *
+ * What it does cost is a quoted line: `> quoted output` pasted out of mail or
+ * Markdown now reads as a command. That is the deliberate trade — in something
+ * copied from a terminal, a line opening with `> ` is a prompt far more often
+ * than it is a quote.
+ */
+const CHEVRON_PROMPT_RE = /^>(?:[ \t]+|$)/;
+
 export type LineKind = "command" | "output";
 
 export interface LineClassification {
@@ -54,7 +72,7 @@ export interface LineClassification {
  * `${FOO}` out — a variable is never followed by a space at that position.
  */
 export function matchPrompt(text: string): number {
-  const match = PROMPT_RE.exec(text) ?? OMZ_PROMPT_RE.exec(text);
+  const match = PROMPT_RE.exec(text) ?? OMZ_PROMPT_RE.exec(text) ?? CHEVRON_PROMPT_RE.exec(text);
   return match ? match[0].length : -1;
 }
 
