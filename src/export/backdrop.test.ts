@@ -16,6 +16,9 @@ function hueSpan(stops: readonly string[]): number {
     .reduce((sum, hue, index) => sum + Math.abs(((((hue - hues[index]!) % 360) + 540) % 360) - 180), 0);
 }
 
+/** Matches the whole-gradient rule `themedBackground` uses to spot a neutral. */
+const isNeutral = (stops: readonly string[]) => Math.max(...stops.map((s) => oklch(s)!.c)) < 0.08;
+
 const medianChroma = (stops: readonly string[]) =>
   [...stops.map((stop) => oklch(stop)!.c)].sort((a, b) => a - b)[Math.floor(stops.length / 2)]!;
 
@@ -46,8 +49,8 @@ describe("themedBackground", () => {
    * these are pinned rather than merely asserted to be self-consistent.
    */
   it("settles ties the same way everywhere", () => {
-    expect(themedBackground(backgroundById("midnight")!, nord)!.stops).toEqual(["#005263", "#396c9b"]);
-    expect(themedBackground(ember, nord)!.stops).toEqual(["#dc8f94", "#a7709e"]);
+    expect(themedBackground(backgroundById("midnight")!, nord)!.stops).toEqual(["#007b7a", "#184c79"]);
+    expect(themedBackground(ember, nord)!.stops).toEqual(["#c0767b", "#846620"]);
   });
 
   it("runs a muted theme's backdrop less saturated than a vivid one's", () => {
@@ -71,8 +74,11 @@ describe("themedBackground", () => {
    */
   it("never flattens a gradient's hue sweep", () => {
     for (const background of BACKGROUNDS) {
+      // Graphite and Ink carry no hue to preserve — `themedBackground` holds
+      // them neutral on purpose, and "leaves the neutral backdrops neutral"
+      // below is what covers them.
+      if (isNeutral(background.stops)) continue;
       const original = hueSpan(background.stops);
-      if (original < 1) continue; // Ink is a single flat colour.
       for (const theme of THEMES) {
         const themed = themedBackground(background, theme)!;
         const ratio = hueSpan(themed.stops) / original;
@@ -87,8 +93,8 @@ describe("themedBackground", () => {
   /** Nord is the palette that prompted all this, so hold it to a tighter bound. */
   it("keeps Nord's sweeps close to the originals", () => {
     for (const background of BACKGROUNDS) {
+      if (isNeutral(background.stops)) continue;
       const original = hueSpan(background.stops);
-      if (original < 1) continue;
       const ratio = hueSpan(themedBackground(background, nord)!.stops) / original;
       expect(ratio, `${background.id} on nord`).toBeGreaterThan(0.75);
       expect(ratio, `${background.id} on nord`).toBeLessThan(1.35);

@@ -1,3 +1,8 @@
+import { clampChroma, formatHex, modeOklch, modeRgb, useMode } from "culori/fn";
+
+useMode(modeRgb);
+useMode(modeOklch);
+
 export interface Background {
   id: string;
   name: string;
@@ -9,15 +14,79 @@ export interface Background {
 /** `null` means a transparent frame — the PNG keeps its alpha channel. */
 export const TRANSPARENT_ID = "none";
 
+/**
+ * The backdrops are placed on a grid rather than picked by eye.
+ *
+ * The set they replaced clustered badly: six of the eight had an endpoint in the
+ * blue/violet 200-300° band, sweeps ran anywhere from 27° to 114° with nothing
+ * explaining why, lightness ranged 0.16 to 0.87 with no ramp, and there was no
+ * green at all — "Mint" started at 163°, which is teal.
+ *
+ * Anchors are spaced 42-75° apart, placed where each name's hue actually lives
+ * rather than on a strict 60° grid, and every gradient travels the same arc
+ * centred on its anchor, so the name describes its middle. Sand sits at 82°
+ * rather than the even-grid 95° because 95 put its tail in lime — the same
+ * complaint as Mint having been teal, and the spacing is worth less than the
+ * names being true. Distinctness is unaffected either way: the closest pair is
+ * Mint against Arctic, which neither anchor touches.
+ *
+ * Lightness *alternates* around the wheel rather than following each hue's
+ * natural luminance, which is the tempting rule and the wrong one. Because
+ * `themedBackground` snaps every stop onto the nearest theme accent, two
+ * backdrops with neighbouring anchors can land on the same pair — and if they
+ * also share a lightness they render as the same swatch. Following natural
+ * luminance bunched Mint, Arctic and Sand together at the light end and did
+ * exactly that: on Dracula, Mint and Arctic came out an OKLab distance of 0.044
+ * apart, two identical-looking options in the picker. Alternating pulls the
+ * closest pair anywhere out to 0.140, which `background.test.ts` holds the line on.
+ */
+const SWEEP = 55;
+
+/** Authored saturation. `themedBackground` caps it per theme, so this is a
+ *  ceiling rather than a promise, and one value keeps that cap even-handed. */
+const CHROMA = 0.16;
+
+/** How much darker a gradient ends than it starts. */
+const FALL = 0.12;
+
+interface Backdrop {
+  id: string;
+  name: string;
+  /** Hue at the middle of the sweep, in degrees. */
+  anchor: number;
+  /** Lightness at the middle of the sweep, 0-1. */
+  lightness: number;
+}
+
+const BACKDROPS: readonly Backdrop[] = [
+  { id: "midnight", name: "Midnight", anchor: 265, lightness: 0.44 },
+  { id: "ember", name: "Ember", anchor: 40, lightness: 0.56 },
+  { id: "mint", name: "Mint", anchor: 150, lightness: 0.62 },
+  { id: "dusk", name: "Dusk", anchor: 325, lightness: 0.7 },
+  { id: "sand", name: "Sand", anchor: 82, lightness: 0.84 },
+  { id: "arctic", name: "Arctic", anchor: 200, lightness: 0.76 },
+];
+
+const stop = (l: number, c: number, h: number) =>
+  formatHex(clampChroma({ mode: "oklch", l, c, h: ((h % 360) + 360) % 360 }, "oklch"));
+
 export const BACKGROUNDS: readonly Background[] = [
-  { id: "midnight", name: "Midnight", angle: 135, stops: ["#1e3a8a", "#6d28d9"] },
-  { id: "ember", name: "Ember", angle: 135, stops: ["#f97316", "#db2777"] },
-  { id: "mint", name: "Mint", angle: 135, stops: ["#059669", "#0891b2"] },
-  { id: "dusk", name: "Dusk", angle: 160, stops: ["#f43f5e", "#7c3aed", "#2563eb"] },
-  { id: "sand", name: "Sand", angle: 135, stops: ["#fbbf24", "#f472b6"] },
-  { id: "arctic", name: "Arctic", angle: 135, stops: ["#67e8f9", "#3b82f6"] },
-  { id: "graphite", name: "Graphite", angle: 135, stops: ["#334155", "#0f172a"] },
-  { id: "ink", name: "Ink", angle: 0, stops: ["#0b0d12", "#0b0d12"] },
+  ...BACKDROPS.map(({ id, name, anchor, lightness }) => ({
+    id,
+    name,
+    angle: 135,
+    stops: [
+      stop(lightness + FALL / 2, CHROMA, anchor - SWEEP / 2),
+      stop(lightness - FALL / 2, CHROMA, anchor + SWEEP / 2),
+    ],
+  })),
+  // The two neutrals have no hue to place on the wheel, so they are spread on
+  // lightness instead — far enough apart that neither collides with the other
+  // nor with Midnight, which desaturates toward neutral on the muted themes.
+  // Graphite's chroma stays under the threshold `themedBackground` treats as a
+  // neutral ramp, so it follows the theme's lightness without taking on colour.
+  { id: "graphite", name: "Graphite", angle: 135, stops: [stop(0.4, 0.02, 265), stop(0.2, 0.02, 265)] },
+  { id: "ink", name: "Ink", angle: 0, stops: [stop(0.16, 0.01, 265), stop(0.16, 0.01, 265)] },
 ];
 
 export const DEFAULT_BACKGROUND_ID = "midnight";
