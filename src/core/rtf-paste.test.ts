@@ -125,6 +125,105 @@ describe("parseRtfClipboard", () => {
     ]);
   });
 
+  // The cases below come from `rtf-stream-parser`'s tokenizer suite, which is
+  // the closest thing to a maintained conformance corpus for RTF in JS. They
+  // are the ones a terminal could plausibly hand us; the Outlook
+  // de-encapsulation half of that suite is not our problem.
+  describe("tokenizer conformance", () => {
+    it("does not scan \\bin's binary payload for control words", () => {
+      // The 4 bytes after `\bin4 ` are data. Reading `\hi2` out of them as
+      // markup is how a parser starts obeying instructions from a payload.
+      expect(shape(doc("\\cf1 a\\bin4 \\hi2b"))).toEqual([[["ab", { fg: "red" }]]]);
+    });
+
+    it("treats \\bin with a zero or negative parameter as carrying nothing", () => {
+      expect(shape(doc("\\cf1 a\\bin0 b\\bin-10 c"))).toEqual([[["abc", { fg: "red" }]]]);
+    });
+
+    it("eats exactly one space after a control word, and none after a symbol", () => {
+      expect(shape(doc("\\cf1 \\b  x"))).toEqual([[[" x", { fg: "red", bold: true }]]]);
+      expect(shape(doc("\\cf1 \\{ x"))).toEqual([[["{ x", { fg: "red" }]]]);
+    });
+
+    it("reads leading zeros and negative numbers in a control word's parameter", () => {
+      expect(shape(doc("\\cf001 x"))).toEqual([[["x", { fg: "red" }]]]);
+      expect(shape(doc("\\cf1 \\b001 x"))).toEqual([[["x", { fg: "red", bold: true }]]]);
+    });
+
+    it("survives a truncated \\' escape instead of swallowing what follows", () => {
+      // `\'F` with nothing after it is not two hex digits. The `F` is left as
+      // text rather than the escape eating the character past the end of it.
+      expect(shape(doc("\\cf1 a\\'F"))).toEqual([[["aF", { fg: "red" }]]]);
+      // `\'Fb` on the other hand *is* well formed — 0xFB is û in cp1252.
+      expect(shape(doc("\\cf1 a\\'Fb"))).toEqual([[["aû", { fg: "red" }]]]);
+    });
+
+    it("drops CR and LF that are not preceded by a backslash", () => {
+      expect(shape(doc("\\cf1 hello how\r\n\r\n are \r\nyou"))).toEqual([
+        [["hello how are you", { fg: "red" }]],
+      ]);
+    });
+
+    it("reads \\~ as a space rather than dropping it", () => {
+      expect(shape(doc("\\cf1 a\\~b"))).toEqual([[["a b", { fg: "red" }]]]);
+    });
+
+    it("resets character formatting on \\plain", () => {
+      expect(shape(doc("\\b\\i\\ul\\strike\\cf1 styled\\plain plain\\cf2 green"))).toEqual([
+        [
+          ["styled", { fg: "red", bold: true, italic: true, underline: true, strikethrough: true }],
+          ["plain", {}],
+          ["green", { fg: "green" }],
+        ],
+      ]);
+    });
+
+    it("decodes \\' bytes through the codepage the document declares", () => {
+      // 0xDE is Þ in cp1252 and Ю in cp1251 — the same byte, two languages.
+      const cp1252 = "{\\rtf1\\ansi\\ansicpg1252{\\colortbl;\\red205\\green49\\blue49;}\\cf1 \\'de}";
+      const cp1251 = "{\\rtf1\\ansi\\ansicpg1251{\\colortbl;\\red205\\green49\\blue49;}\\cf1 \\'de}";
+      expect(shape(cp1252)).toEqual([[["Þ", { fg: "red" }]]]);
+      expect(shape(cp1251)).toEqual([[["Ю", { fg: "red" }]]]);
+    });
+
+    it("decodes a multi-byte character from its bytes together, not one at a time", () => {
+      // Shift-JIS spells 日 as 0x93 0xFA. Decoded separately they are garbage.
+      const rtf = "{\\rtf1\\ansi\\ansicpg932{\\colortbl;\\red205\\green49\\blue49;}\\cf1 \\'93\\'fa}";
+      expect(shape(rtf)).toEqual([[["日", { fg: "red" }]]]);
+    });
+
+    it("falls back to cp1252 for a codepage with no decoder to reach for", () => {
+      const rtf = "{\\rtf1\\ansi\\ansicpg437{\\colortbl;\\red205\\green49\\blue49;}\\cf1 \\'e0}";
+      expect(shape(rtf)).toEqual([[["à", { fg: "red" }]]]);
+    });
+
+    it("lets a font's charset outrank the document codepage", () => {
+      // Outlook does exactly this: cp1252 on the document, Japanese in a run
+      // pointed at a \fcharset128 font. Going by the document alone is garbage.
+      const rtf = "{\\rtf1\\ansi\\ansicpg1252" +
+        "{\\fonttbl{\\f0\\fswiss\\fcharset0 Arial;}{\\f4\\fswiss\\fcharset128 MS PGothic;}}" +
+        "{\\colortbl;\\red205\\green49\\blue49;}\\cf1 \\f4 \\'83\\'65\\'83\\'4c}";
+      expect(shape(rtf)).toEqual([[["テキ", { fg: "red" }]]]);
+    });
+
+    it("reads byte escapes as cp1252 even when the document claims UTF-16", () => {
+      // Word writes \ansicpg1200 and then cp1252 byte escapes anyway, putting
+      // the genuinely wide characters in \u instead.
+      const rtf = "{\\rtf1\\ansi\\ansicpg1200{\\colortbl;\\red205\\green49\\blue49;}\\cf1 \\'80\\'bd}";
+      expect(shape(rtf)).toEqual([[["€½", { fg: "red" }]]]);
+    });
+
+    it("rebuilds an astral character from its surrogate pair", () => {
+      // 😀 is two \u escapes, both in RTF's negative form.
+      const rtf = "{\\rtf1\\ansi{\\colortbl;\\red205\\green49\\blue49;}\\cf1 \\uc0\\u-10179 \\u-8704 }";
+      expect(shape(rtf)).toEqual([[["😀", { fg: "red" }]]]);
+    });
+
+    it("stops at the closing brace instead of reading trailing rubbish", () => {
+      expect(shape(doc("\\cf1 x") + "  \n")).toEqual([[["x", { fg: "red" }]]]);
+    });
+  });
+
   it("agrees with the HTML parser on the same copy", () => {
     // The two flavours are the same paste seen on macOS and off it. Whichever
     // one a platform hands us, the document has to come out the same.
