@@ -3,7 +3,7 @@ import { NAMED_COLORS, type Color, type NamedColor } from "./types.ts";
 /** xterm's 6x6x6 color cube levels. */
 const CUBE_LEVELS = [0, 95, 135, 175, 215, 255] as const;
 
-function hex(r: number, g: number, b: number): string {
+function hex(r: number, g: number, b: number): `#${string}` {
   const to = (n: number) => n.toString(16).padStart(2, "0");
   return `#${to(r)}${to(g)}${to(b)}`;
 }
@@ -86,7 +86,7 @@ export function parseCssColor(input: string): Rgb | null {
   return null;
 }
 
-export function rgbToHex({ r, g, b }: Rgb): string {
+export function rgbToHex({ r, g, b }: Rgb): `#${string}` {
   const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
   return hex(clamp(r), clamp(g), clamp(b));
 }
@@ -126,10 +126,15 @@ const DISTANCE_TOLERANCE = 24;
  * Map an arbitrary CSS color back onto the palette, so a rich-text paste from a
  * terminal keeps its *semantic* color (`green`) rather than one theme's idea of
  * what green looks like. Falls back to the literal hex when nothing is close.
+ *
+ * `null` when the input is not a color this can read at all. Passing it through
+ * unchanged would be the tempting thing to do and the wrong one: it would put a
+ * value on a leaf that no escape code can express, so the run would paint in the
+ * editor and then export as unstyled text.
  */
-export function nearestPaletteColor(input: string, ansi16: readonly string[]): Color {
+export function nearestPaletteColor(input: string, ansi16: readonly string[]): Color | null {
   const target = parseCssColor(input);
-  if (!target) return input;
+  if (!target) return null;
 
   let best: { color: Color; distance: number } | null = null;
   const consider = (color: Color, candidate: string) => {

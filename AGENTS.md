@@ -1,5 +1,7 @@
 # Working in this repo
 
+**Read [wiki/architecture.md](wiki/architecture.md) first.** It is the map of the system — the four layers and which way they depend, how a paste becomes pixels, the invariants that are load-bearing (above all: everything Boron draws has to be expressible as an ANSI escape sequence), the three renderers that have to agree, and a "where do I change X?" table. This file covers *process*; that one covers *the code*.
+
 ## Git
 
 **Commit straight to `main`.** No branches, no pull requests, no staging your work for review. When something is done, commit it and push it — a push deploys to [boron.sh](https://boron.sh) via Vercel, and that is fine.

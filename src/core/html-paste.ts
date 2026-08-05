@@ -1,6 +1,6 @@
 import type { ParsedLine, ParsedSpan } from "./ansi.ts";
 import { nearestPaletteColor, parseCssColor, rgbToHex } from "./palette.ts";
-import type { Marks } from "./types.ts";
+import type { Color, Marks } from "./types.ts";
 
 const BLOCK_TAGS = new Set([
   "address", "article", "aside", "blockquote", "div", "dd", "dl", "dt", "fieldset",
@@ -108,13 +108,15 @@ interface Collector {
 
 function pushText(collector: Collector, text: string, style: Inherited, defaults: Defaults): void {
   if (text.length === 0) return;
+  // A color the palette cannot read leaves the run uncolored rather than
+  // carrying something no escape code can say.
+  const named = (value: string | null, base: string | null): Color | null =>
+    value && value !== base ? nearestPaletteColor(value, defaults.ansi16) : null;
+  const fg = named(style.color, defaults.color);
+  const bg = named(style.background, defaults.background);
   const marks: Marks = {
-    ...(style.color && style.color !== defaults.color
-      ? { fg: nearestPaletteColor(style.color, defaults.ansi16) }
-      : {}),
-    ...(style.background && style.background !== defaults.background
-      ? { bg: nearestPaletteColor(style.background, defaults.ansi16) }
-      : {}),
+    ...(fg ? { fg } : {}),
+    ...(bg ? { bg } : {}),
     ...(style.bold ? { bold: true as const } : {}),
     ...(style.dim ? { dim: true as const } : {}),
     ...(style.italic ? { italic: true as const } : {}),

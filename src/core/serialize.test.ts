@@ -4,7 +4,7 @@ import { documentToRenderLines, parsedLinesToDocument, type LineElement } from "
 import { toAnsi, toChalkSource, toPlainText } from "./serialize.ts";
 import { resolveStyle, roleMarks } from "./style.ts";
 import { THEMES, themeById, type Theme } from "./themes.ts";
-import type { RenderLine } from "./types.ts";
+import { MODIFIER_KEYS, NAMED_COLORS, type Color, type RenderLine } from "./types.ts";
 
 const E = "\u001b";
 const theme = THEMES[0]!;
@@ -177,6 +177,44 @@ describe("theme independence", () => {
       const rendered = resolveStyle({}, "command", candidate);
       expect(rendered.bold).toBe(true);
       expect(rendered.color).toBe(candidate.foreground);
+    }
+  });
+});
+
+describe("the representability invariant", () => {
+  /**
+   * The other half of the promise `Color` makes. The type and `isColor` decide
+   * what may reach a leaf; this checks that everything they admit comes back out
+   * as a real escape sequence, so no run can paint on screen and then export as
+   * bare text.
+   */
+  it("gives every color the model admits an escape code", () => {
+    const colors: Color[] = [
+      ...NAMED_COLORS,
+      "ansi256:0",
+      "ansi256:16",
+      "ansi256:255",
+      "#000000",
+      "#1e3a8a",
+      "#abc",
+    ];
+    for (const fg of colors) {
+      const doc: LineElement[] = [{ type: "line", children: [{ text: "x", fg }] }];
+      const ansi = toAnsi(render(doc));
+      expect(ansi, `no escape code for ${fg}`).not.toBe("x");
+      expect(ansi).toMatch(/^\[[0-9;]+mx\[0m$/);
+      // And round-trips. Re-parsing normalizes two forms without losing the
+      // color: a shorthand hex expands, and the first sixteen 256-indices come
+      // back named, because `black` and `ansi256:0` are one palette entry.
+      const normalized: Record<string, string> = { "#abc": "#aabbcc", "ansi256:0": "black" };
+      expect(parseAnsi(ansi)[0]!.spans[0]!.marks.fg).toBe(normalized[fg] ?? fg);
+    }
+  });
+
+  it("gives every modifier an escape code too", () => {
+    for (const key of MODIFIER_KEYS) {
+      const doc: LineElement[] = [{ type: "line", children: [{ text: "x", [key]: true }] }];
+      expect(toAnsi(render(doc)), `no escape code for ${key}`).not.toBe("x");
     }
   });
 });

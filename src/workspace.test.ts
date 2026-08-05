@@ -148,6 +148,76 @@ describe("sanitizing", () => {
     expect(sanitizeDocument([{ type: "line", children: [{ bold: true }] }])).toBeNull();
     expect(sanitizeDocument(document)).toEqual(document);
   });
+
+  it("gives a childless line the empty leaf Slate insists on", () => {
+    expect(sanitizeDocument([{ type: "line", children: [] }])).toEqual([
+      { type: "line", children: [{ text: "" }] },
+    ]);
+  });
+
+  /**
+   * The one property the whole tool rests on: everything Boron draws has to be
+   * something a terminal could have printed. A URL is written by whoever sends
+   * it, so this is the door that has to hold.
+   */
+  it("drops any mark that has no escape code behind it", () => {
+    const smuggled = [
+      {
+        type: "line",
+        children: [
+          { text: "a", fg: "rebeccapurple" },
+          { text: "b", bg: "oklch(0.7 0.1 200)" },
+          { text: "c", fg: "url(https://example.com/x.png)" },
+          { text: "d", fg: "#12345" },
+          { text: "e", fg: "ansi256:256" },
+          { text: "f", blink: true, fontSize: 96 },
+          { text: "g", bold: "yes" },
+        ],
+      },
+    ];
+    expect(sanitizeDocument(smuggled)).toEqual([
+      {
+        type: "line",
+        children: [
+          { text: "a" },
+          { text: "b" },
+          { text: "c" },
+          { text: "d" },
+          { text: "e" },
+          { text: "f" },
+          { text: "g" },
+        ],
+      },
+    ]);
+  });
+
+  it("keeps every color a terminal can actually be told", () => {
+    const legal = [
+      {
+        type: "line",
+        children: [
+          { text: "a", fg: "greenBright" },
+          { text: "b", bg: "ansi256:255" },
+          { text: "c", fg: "ansi256:0" },
+          { text: "d", fg: "#1e3a8a" },
+          { text: "e", fg: "#abc" },
+          { text: "f", bold: true, dim: true, italic: true, underline: true },
+          { text: "g", strikethrough: true, inverse: true, hidden: true },
+        ],
+      },
+    ];
+    expect(sanitizeDocument(legal)).toEqual(legal);
+  });
+
+  it("holds that door on the way in from a link", async () => {
+    const decoded = await decodeWorkspace(
+      plainPayload({
+        v: 1,
+        doc: [{ type: "line", children: [{ text: "hi", fg: "rebeccapurple", bold: true }] }],
+      }),
+    );
+    expect(decoded?.document).toEqual([{ type: "line", children: [{ text: "hi", bold: true }] }]);
+  });
 });
 
 describe("the URL", () => {

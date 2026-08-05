@@ -1,6 +1,13 @@
 import { parseAnsi } from "./core/ansi.ts";
-import { emptyDocument, parsedLinesToDocument, type TerminalDocument } from "./core/document.ts";
+import {
+  emptyDocument,
+  parsedLinesToDocument,
+  type LineElement,
+  type StyledText,
+  type TerminalDocument,
+} from "./core/document.ts";
 import { DEFAULT_THEME, themeById } from "./core/themes.ts";
+import { MODIFIER_KEYS, isColor, type Marks } from "./core/types.ts";
 import { DEFAULT_BACKGROUND_ID, TRANSPARENT_ID, backgroundById } from "./export/background.ts";
 import { DEFAULT_FRAME, type FrameSettings } from "./export/layout.ts";
 
@@ -51,20 +58,51 @@ export function sanitizeFrame(input: unknown): FrameSettings {
   };
 }
 
-/** A Slate document, or `null` when the shape isn't one. */
+/**
+ * The marks on one leaf, keeping only what a terminal could be told.
+ *
+ * Everything Boron draws has to be expressible as an escape sequence, and the
+ * `Color` type says so — but a type says nothing at a door like this one, where
+ * the bytes came off a URL somebody else wrote. A `fg` of `rebeccapurple` would
+ * satisfy the browser, paint in the editor, and then serialize to nothing at
+ * all. Anything that is not a real SGR mark is dropped here instead.
+ */
+function sanitizeMarks(leaf: Record<string, unknown>): Marks {
+  const marks: Marks = {};
+  if (isColor(leaf.fg)) marks.fg = leaf.fg;
+  if (isColor(leaf.bg)) marks.bg = leaf.bg;
+  for (const key of MODIFIER_KEYS) {
+    if (leaf[key] === true) marks[key] = true;
+  }
+  return marks;
+}
+
+/**
+ * A Slate document, rebuilt leaf by leaf, or `null` when the shape isn't one.
+ * Rebuilt rather than waved through: the copy is what guarantees every mark on
+ * it is one the exporters can write.
+ */
 export function sanitizeDocument(input: unknown): TerminalDocument | null {
   if (!Array.isArray(input) || input.length === 0) return null;
-  const valid = input.every(
-    (line: unknown) =>
-      typeof line === "object" &&
-      line !== null &&
-      (line as { type?: unknown }).type === "line" &&
-      Array.isArray((line as { children?: unknown }).children) &&
-      (line as { children: unknown[] }).children.every(
-        (child) => typeof (child as { text?: unknown } | null)?.text === "string",
-      ),
-  );
-  return valid ? (input as TerminalDocument) : null;
+
+  const lines: LineElement[] = [];
+  for (const line of input as unknown[]) {
+    if (typeof line !== "object" || line === null) return null;
+    const { type, children } = line as { type?: unknown; children?: unknown };
+    if (type !== "line" || !Array.isArray(children)) return null;
+
+    const leaves: StyledText[] = [];
+    for (const child of children as unknown[]) {
+      if (typeof child !== "object" || child === null) return null;
+      const leaf = child as Record<string, unknown>;
+      if (typeof leaf.text !== "string") return null;
+      leaves.push({ text: leaf.text, ...sanitizeMarks(leaf) });
+    }
+
+    // Slate will not accept an element with no children.
+    lines.push({ type: "line", children: leaves.length > 0 ? leaves : [{ text: "" }] });
+  }
+  return lines;
 }
 
 /** An unknown theme falls back to the default rather than to nothing. */

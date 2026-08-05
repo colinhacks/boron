@@ -21,16 +21,38 @@ export const NAMED_COLORS = [
 export type NamedColor = (typeof NAMED_COLORS)[number];
 
 /**
- * A color, serialized as a string so it can live directly on a Slate leaf:
- * a `NamedColor`, `ansi256:<0-255>`, or `#rrggbb`.
+ * A color, serialized as a string so it can live directly on a Slate leaf.
+ *
+ * The three forms are the three ways a terminal can be told about a color, and
+ * that is the whole point: a `NamedColor` is one of the sixteen SGR codes,
+ * `ansi256:<0-255>` is `38;5;n`, and `#rrggbb` is `38;2;r;g;b`. There is no
+ * fourth case, because there is no fourth escape sequence — a `rebeccapurple`
+ * or an `oklch(…)` would paint on screen and then vanish from the ANSI export,
+ * leaving a pixel with nothing behind it.
  *
  * Named colors are kept named rather than resolved to hex so that switching
  * theme re-maps them, and so ANSI export round-trips to the original SGR code.
  */
-export type Color = string;
+export type Color = NamedColor | `ansi256:${number}` | `#${string}`;
 
-export function isNamedColor(color: Color): color is NamedColor {
+export function isNamedColor(color: string): color is NamedColor {
   return (NAMED_COLORS as readonly string[]).includes(color);
+}
+
+const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+/**
+ * Whether an untrusted string is a color Boron can actually emit an escape code
+ * for. The type says which shapes are legal; this is what holds the line at the
+ * doors the type cannot watch — a share link, a stored workspace.
+ */
+export function isColor(value: unknown): value is Color {
+  if (typeof value !== "string") return false;
+  if (isNamedColor(value)) return true;
+  if (HEX_COLOR.test(value)) return true;
+  if (!value.startsWith("ansi256:")) return false;
+  const index = value.slice("ansi256:".length);
+  return /^\d{1,3}$/.test(index) && Number(index) <= 255;
 }
 
 /**

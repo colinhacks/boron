@@ -39,6 +39,7 @@ import { FloatingToolbar } from "./ui/FloatingToolbar.tsx";
 import { sampleDocument } from "./ui/sample.ts";
 import {
   buildShareUrl,
+  consumeSharedWorkspace,
   sanitizeBackgroundId,
   sanitizeDocument,
   sanitizeFrame,
@@ -260,17 +261,50 @@ export function App({ shared }: AppProps = {}) {
     else await copyAs(copyMode);
   }, [copyMode, handleCopyImage, handleCopyLink, copyAs]);
 
+  /**
+   * Swap the whole workspace out from under the editor. Slate takes its initial
+   * value once and never again, so a new document has to be pushed onto the
+   * editor by hand rather than re-rendered in.
+   */
+  const applyWorkspace = useCallback(
+    (next: Workspace) => {
+      editor.children = next.document;
+      editor.selection = null;
+      editor.onChange();
+      setValue(next.document);
+      setThemeId(next.themeId);
+      setBackgroundId(next.backgroundId);
+      setFrame(next.frame);
+    },
+    [editor],
+  );
+
   /** Reset means everything — the document and every setting around it. */
   const resetAll = useCallback(() => {
-    const next = sampleDocument();
-    editor.children = next;
-    editor.selection = null;
-    editor.onChange();
-    setValue(next);
-    setFrame(DEFAULT_FRAME);
-    setThemeId(DEFAULT_THEME.id);
-    setBackgroundId(DEFAULT_BACKGROUND_ID);
-  }, [editor]);
+    applyWorkspace({
+      document: sampleDocument(),
+      themeId: DEFAULT_THEME.id,
+      backgroundId: DEFAULT_BACKGROUND_ID,
+      frame: DEFAULT_FRAME,
+    });
+  }, [applyWorkspace]);
+
+  /**
+   * A share link pasted into a tab that is already on Boron changes only the
+   * fragment, and a browser does not reload for that — so the load-time handoff
+   * in `main.tsx` never runs and the link would appear to do nothing at all.
+   */
+  useEffect(() => {
+    const onHashChange = () => {
+      void consumeSharedWorkspace().then((next) => {
+        if (!next) return;
+        applyWorkspace(next);
+        flash("Opened a shared link");
+      });
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [applyWorkspace, flash]);
 
   // Dragging either edge of the block sets the minimum width. Captured on
   // pointerdown so the gesture survives the layout changing underneath it.
