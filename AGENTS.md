@@ -1,6 +1,6 @@
 # Working in this repo
 
-**Read [wiki/architecture.md](wiki/architecture.md) first.** It is the map of the system — the four layers and which way they depend, how a paste becomes pixels, the invariants that are load-bearing (above all: everything Boron draws has to be expressible as an ANSI escape sequence), the three renderers that have to agree, and a "where do I change X?" table. This file covers *process*; that one covers *the code*.
+**Read [wiki/architecture.md](wiki/architecture.md) first.** It is the map of the system — the four layers and which way they depend, how a paste becomes pixels, the invariants that are load-bearing (above all: everything Boron draws has to be expressible as an ANSI escape sequence), the three renderers that have to agree, and a "where do I change X?" table. This file covers *process*; that one covers *the code*. [wiki/og-images.md](wiki/og-images.md) is a design sketch for rendering a share link's card server-side, and documents a measured gap worth knowing about either way: the bundled font is latin-only, so box-drawing and arrows lay out against the reader's system font.
 
 ## Git
 
