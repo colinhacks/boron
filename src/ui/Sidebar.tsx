@@ -172,46 +172,23 @@ export function Sidebar({
           suffix="%"
           onChange={(shadowStrength) => onFrameChange({ shadowStrength })}
         />
+        <Slider
+          label="Padding"
+          value={frame.framePadding}
+          min={0}
+          max={140}
+          onChange={(framePadding) => onFrameChange({ framePadding })}
+        />
+        <Slider
+          label="Minimum width"
+          value={frame.minColumns}
+          min={20}
+          max={120}
+          suffix=" cols"
+          onChange={(minColumns) => onFrameChange({ minColumns })}
+        />
       </section>
 
-      {/* Defaults that are already right for almost every block — folded away so
-          the panel above reads as the whole of the everyday surface. */}
-      <details className="advanced">
-        <summary className="advanced__summary">Advanced</summary>
-        <div className="advanced__body">
-          <Slider
-            label="Font size"
-            value={frame.fontSize}
-            min={10}
-            max={28}
-            onChange={(fontSize) => onFrameChange({ fontSize })}
-          />
-          <Slider
-            label="Line height"
-            value={frame.lineHeightRatio}
-            min={1.1}
-            max={2.2}
-            step={0.05}
-            suffix="×"
-            onChange={(lineHeightRatio) => onFrameChange({ lineHeightRatio })}
-          />
-          <Slider
-            label="Padding"
-            value={frame.framePadding}
-            min={0}
-            max={140}
-            onChange={(framePadding) => onFrameChange({ framePadding })}
-          />
-          <Slider
-            label="Minimum width"
-            value={frame.minColumns}
-            min={20}
-            max={120}
-            suffix=" cols"
-            onChange={(minColumns) => onFrameChange({ minColumns })}
-          />
-        </div>
-      </details>
     </aside>
   );
 }

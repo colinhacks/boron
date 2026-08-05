@@ -10,9 +10,16 @@ import { FONT_FAMILY } from "./fonts.ts";
  */
 export const TERMINAL_PADDING = 24;
 
+/**
+ * Type size and line height are fixed. Both were tunable and neither earned it:
+ * the block is exported at a scale factor anyway, so font size only changed how
+ * much a line could hold, and every line height but this one made the rows read
+ * as either cramped or double-spaced.
+ */
+export const FONT_SIZE = 15;
+export const LINE_HEIGHT_RATIO = 1.55;
+
 export interface FrameSettings {
-  fontSize: number;
-  lineHeightRatio: number;
   /** Space between the terminal and the edge of the image. */
   framePadding: number;
   radius: number;
@@ -25,8 +32,6 @@ export interface FrameSettings {
 }
 
 export const DEFAULT_FRAME: FrameSettings = {
-  fontSize: 15,
-  lineHeightRatio: 1.55,
   framePadding: 48,
   radius: 12,
   showChrome: true,
@@ -61,6 +66,8 @@ export interface Layout {
   lineHeight: number;
   charWidth: number;
   chromeHeight: number;
+  /** Widest line of text, in px. A resize cannot pull the block narrower than this. */
+  widest: number;
   /** Vertical padding that grows an inline background to a full terminal cell. */
   halfLeading: number;
   terminal: Rect;
@@ -114,7 +121,7 @@ function measureCharWidth(fontSize: number): number {
 }
 
 function chromeHeightFor(frame: FrameSettings): number {
-  return frame.showChrome ? Math.round(frame.fontSize * 2.7) : 0;
+  return frame.showChrome ? Math.round(FONT_SIZE * 2.7) : 0;
 }
 
 export function computeLayout(
@@ -122,8 +129,8 @@ export function computeLayout(
   theme: Theme,
   frame: FrameSettings,
 ): Layout {
-  const { fontSize } = frame;
-  const lineHeight = Math.round(fontSize * frame.lineHeightRatio);
+  const fontSize = FONT_SIZE;
+  const lineHeight = Math.round(fontSize * LINE_HEIGHT_RATIO);
   const charWidth = measureCharWidth(fontSize);
   const chromeHeight = chromeHeightFor(frame);
   const { baseline: offset, halfLeading } = leading(fontSize, lineHeight);
@@ -169,6 +176,7 @@ export function computeLayout(
     lineHeight,
     charWidth,
     chromeHeight,
+    widest,
     halfLeading,
     terminal,
     width: terminal.width + frame.framePadding * 2,
@@ -186,7 +194,7 @@ export interface TrafficLight {
 
 export function trafficLights(layout: Layout, frame: FrameSettings): TrafficLight[] {
   if (!frame.showChrome) return [];
-  const r = Math.max(4, Math.round(frame.fontSize * 0.38));
+  const r = Math.max(4, Math.round(FONT_SIZE * 0.38));
   const cy = layout.terminal.y + layout.chromeHeight / 2;
   const gap = r * 3.4;
   const startX = layout.terminal.x + TERMINAL_PADDING + r;

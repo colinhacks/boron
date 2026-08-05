@@ -19,6 +19,7 @@ import {
 } from "./export/index.ts";
 import {
   DEFAULT_FRAME,
+  FONT_SIZE,
   TERMINAL_PADDING,
   computeLayout,
   trafficLights,
@@ -218,13 +219,59 @@ export function App() {
     else await copyAs(copyMode);
   }, [copyMode, handleCopyImage, copyAs]);
 
-  const resetDocument = useCallback(() => {
+  /** Reset means everything — the document and every setting around it. */
+  const resetAll = useCallback(() => {
     const next = sampleDocument();
     editor.children = next;
     editor.selection = null;
     editor.onChange();
     setValue(next);
+    setFrame(DEFAULT_FRAME);
+    setThemeId(DEFAULT_THEME.id);
+    setBackgroundId("midnight");
   }, [editor]);
+
+  // Dragging either edge of the block sets the minimum width. Captured on
+  // pointerdown so the gesture survives the layout changing underneath it.
+  const resizeRef = useRef<{ startX: number; startCols: number; side: "left" | "right"; floor: number; scale: number } | null>(null);
+
+  const startResize = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>, side: "left" | "right") => {
+      if (!layout) return;
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      resizeRef.current = {
+        startX: event.clientX,
+        startCols: (layout.terminal.width - TERMINAL_PADDING * 2) / layout.charWidth,
+        side,
+        // Never narrower than the longest line — the block does not reflow.
+        floor: Math.ceil(layout.widest / layout.charWidth),
+        // Frozen for the gesture: widening the block can shrink the preview to
+        // fit, and reading that live would make the drag accelerate under the
+        // pointer.
+        scale: previewScale,
+      };
+    },
+    [layout, previewScale],
+  );
+
+  const moveResize = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const drag = resizeRef.current;
+      if (!drag || !layout) return;
+      // The block stays centred, so an edge only travels half the width it adds.
+      const dx = ((event.clientX - drag.startX) / drag.scale) * (drag.side === "right" ? 1 : -1);
+      const next = Math.round(drag.startCols + (dx * 2) / layout.charWidth);
+      setFrame((current) => ({ ...current, minColumns: Math.max(drag.floor, Math.min(200, next)) }));
+    },
+    [layout],
+  );
+
+  const endResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!resizeRef.current) return;
+    resizeRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  }, []);
 
   const lights = layout ? trafficLights(layout, frame) : [];
   const shadow = resolveShadow(frame.shadowStrength);
@@ -245,7 +292,7 @@ export function App() {
         </div>
 
         <div className="export-bar">
-          <button type="button" className="button button--quiet" onClick={resetDocument}>
+          <button type="button" className="button button--quiet" onClick={resetAll}>
             Reset
           </button>
 
@@ -331,7 +378,7 @@ export function App() {
                             style={{
                               color: chromeTitleColor(theme),
                               fontFamily: FONT_FAMILY,
-                              fontSize: frame.fontSize * CHROME_TITLE_SCALE,
+                              fontSize: FONT_SIZE * CHROME_TITLE_SCALE,
                             }}
                           >
                             {frame.title}
@@ -343,13 +390,35 @@ export function App() {
                     <TerminalSurface
                       editor={editor}
                       theme={theme}
-                      fontSize={frame.fontSize}
+                      fontSize={FONT_SIZE}
                       lineHeight={layout.lineHeight}
                       halfLeading={layout.halfLeading}
                       padding={TERMINAL_PADDING}
                       width={layout.terminal.width}
                     />
                   </div>
+
+                  {(["left", "right"] as const).map((side) => (
+                    <div
+                      key={side}
+                      className="resize-handle"
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-label="Drag to set the minimum width"
+                      style={{
+                        left:
+                          side === "left"
+                            ? layout.terminal.x - 5
+                            : layout.terminal.x + layout.terminal.width - 5,
+                        top: layout.terminal.y,
+                        height: layout.terminal.height,
+                      }}
+                      onPointerDown={(event) => startResize(event, side)}
+                      onPointerMove={moveResize}
+                      onPointerUp={endResize}
+                      onPointerCancel={endResize}
+                    />
+                  ))}
                 </div>
                 </div>
                 <p className="stage__caption">Edit above or try copy/pasting from your terminal.</p>

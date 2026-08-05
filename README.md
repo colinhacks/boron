@@ -1,8 +1,8 @@
-<p align="center">
+<h1 align="center">
   <img src="public/mark.svg" alt="" width="88" height="88">
-</p>
-
-<h1 align="center">Boron</h1>
+  <br>
+  Boron
+</h1>
 
 <p align="center">Gorgeous, editable terminal screenshots.</p>
 
