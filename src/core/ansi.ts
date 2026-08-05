@@ -209,9 +209,11 @@ function isTrimmableCell(cell: Cell): boolean {
   return cell.ch === " " && cell.state.bg === null && !cell.state.underline && !cell.state.inverse;
 }
 
-function coalesce(cells: readonly Cell[]): ParsedLine {
+function coalesce(cells: readonly Cell[], trimTrailing: boolean): ParsedLine {
   let end = cells.length;
-  while (end > 0 && isTrimmableCell(cells[end - 1]!)) end -= 1;
+  if (trimTrailing) {
+    while (end > 0 && isTrimmableCell(cells[end - 1]!)) end -= 1;
+  }
 
   const spans: ParsedSpan[] = [];
   const marksCache = new Map<SgrState, Marks>();
@@ -236,6 +238,18 @@ function coalesce(cells: readonly Cell[]): ParsedLine {
   return { spans };
 }
 
+export interface ParseOptions {
+  /**
+   * Drop trailing runs of plain spaces, which is what a paste wants — a terminal
+   * pads its rows out to the window and none of it is content.
+   *
+   * A share link wants the opposite. Trailing spaces feed `layout.widest`, so
+   * dropping them narrows the block, and a format that quietly changes the
+   * picture is not a format you can freeze. Defaults to trimming.
+   */
+  trimTrailing?: boolean;
+}
+
 /**
  * Parse terminal output — ANSI escapes and all — into styled lines.
  *
@@ -244,7 +258,8 @@ function coalesce(cells: readonly Cell[]): ParsedLine {
  * do in a real terminal. That is what makes a pasted progress bar or spinner
  * collapse to its final frame instead of smearing across the line.
  */
-export function parseAnsi(input: string): ParsedLine[] {
+export function parseAnsi(input: string, options: ParseOptions = {}): ParsedLine[] {
+  const trimTrailing = options.trimTrailing ?? true;
   const lines: ParsedLine[] = [];
   let cells: Cell[] = [];
   let col = 0;
@@ -262,7 +277,7 @@ export function parseAnsi(input: string): ParsedLine[] {
   };
 
   const endLine = () => {
-    lines.push(coalesce(cells));
+    lines.push(coalesce(cells, trimTrailing));
     cells = [];
     col = 0;
   };

@@ -1,4 +1,4 @@
-# Share links, and why they are not shipped
+# Share links: the wire format, and why the first attempt was pulled
 
 Share links — the whole workspace encoded into the URL, so a link reopens the exact picture — were built, verified and briefly live. They were then pulled back off `main`. The work is on the `share-links-wire-format` branch; this is the reasoning, so the next attempt starts from it rather than rediscovering it.
 
@@ -39,9 +39,19 @@ Worth separating, because it decides what a future format should carry.
 
 So the risk is encoding risk rather than model risk, which is also why it is tractable: a wire format that describes the stable model, with a mapping to whatever the editor happens to use, does not need to change often.
 
-## Options for a second attempt
+## The seam now exists — [src/wire.ts](../src/wire.ts)
 
-1. **An explicit frozen wire schema.** `WireDocument`/`WireFrame` types that deliberately never reference `TerminalDocument` or `FrameSettings`, plus `toWire`/`fromWire`. The internal model then moves freely behind the seam. Costs a mapping layer and its tests; makes the commitment explicit and reviewable in one file.
+Option 1 below is built. `WireWorkspaceV1` is made of strings, numbers and booleans and references no editor type; `toWire`/`fromWire` are the only place the two vocabularies meet. Content travels as **ANSI**, because that is the one part of this Boron did not invent — ECMA-48 cannot drift without terminals drifting, and the invariant that every document is expressible in it is now enforced rather than hoped for.
+
+The wire names are deliberately not the internal ones: `padding` not `framePadding`, `titleBar` not `showChrome`, `shadow` not `shadowStrength`, `columns` not `minColumns` — because "at least this many columns wide" is a terminal idea while a minimum-width sizing strategy is ours to change. A test asserts none of the internal names leak into a payload.
+
+Two lossiness bugs that ANSI-as-a-format would otherwise have had, both fixed and both pinned by a test: `parseAnsi` gained a `trimTrailing` option, because trailing spaces feed `layout.widest` and dropping them narrows the block; and the content is serialized from raw marks rather than through the `$`-prompt heuristic, which would otherwise freeze one reading of the document.
+
+What is still **not** built: the base64/URL layer on top. That is now a small wrapper, and it is a separate decision.
+
+## Options that were considered
+
+1. **An explicit frozen wire schema.** `WireDocument`/`WireFrame` types that deliberately never reference `TerminalDocument` or `FrameSettings`, plus `toWire`/`fromWire`. The internal model then moves freely behind the seam. **Chosen.**
 2. **ANSI as the content format.** The project's own thesis is that every document is expressible as escape codes, and that is now enforced rather than hoped for. ANSI is externally standardized and human-inspectable, so it is the natural candidate — but note it is *not* quite lossless: `parseAnsi` trims trailing plain spaces and expands tabs, and trailing spaces feed `layout.widest`, so a round trip can narrow the block. Would need either a raw-marks serializer (today's `toAnsi` bakes the prompt heuristic into explicit marks) or acceptance of that edge.
 3. **Ship as-is and keep every old decoder forever.** Cheapest today. The catch is that an old decoder still has to produce a *current* workspace, so the translation layer of option 1 gets written anyway — just later, against a model that has moved, with links already in the wild.
 
@@ -49,9 +59,9 @@ So the risk is encoding risk rather than model risk, which is also why it is tra
 
 "Be careful forever" is not a mechanism. The thing that actually enforces it is a **frozen corpus**: hand-written literal payload strings checked into the repo alongside their expected decoded workspace, so any change that breaks an old link fails the suite rather than a review.
 
-This repo already has exactly that discipline for a different reason — [clipboard-fixtures.ts](../src/core/clipboard-fixtures.ts) holds real clipboard bytes captured off a real pasteboard, precisely because invented markup only tests your imagination. Share payloads deserve the same treatment: real links, captured, never regenerated.
+This repo already has exactly that discipline for a different reason — [clipboard-fixtures.ts](../src/core/clipboard-fixtures.ts) holds real clipboard bytes captured off a real pasteboard, precisely because invented markup only tests your imagination. Share payloads get the same treatment: the `CORPUS` in [wire.test.ts](../src/wire.test.ts) is hand-written literal payloads with their expected decode, never regenerated. Adding an entry is always fine; editing one means you have broken a link. Verified it bites — shifting the SGR 30-37 mapping, dropping the named form for 256-indices 0-15, and moving a frame clamp each make it fail.
 
 ## Open questions
 
-- Slate versus ProseMirror was never evaluated. Slate predates this work, and if the editor is genuinely in question then the wire format should be settled *first* — deciding the format second is what created this problem.
+- Slate versus ProseMirror: researched, written up in the handoff. Short version — ProseMirror is the more rigorous foundation (declarative schema, closed mark set, 1.x since 2017) and Slate is still 0.x by its author's own description, but migrating would *not* have prevented this problem, because PM's JSON is just as internal. The seam is what prevents it, and it is editor-independent by construction, so the choice stays reversible.
 - Whether the frame settings belong in a link at all, or whether a link should carry only content and let the reader's own frame apply.
