@@ -1,7 +1,9 @@
-import { createEditor } from "slate";
 import { describe, expect, it } from "vitest";
 import { documentToRenderLines, type LineElement } from "../core/document.ts";
 import { wrapRenderLines } from "../core/wrap.ts";
+import { EditorState } from "prosemirror-state";
+import { EditorView } from "prosemirror-view";
+import { documentToNode, nodeToDocument } from "./schema.ts";
 import {
   boxFragment,
   boxMarks,
@@ -19,7 +21,6 @@ import {
   type BoxSelection,
   type Grid,
 } from "./box.ts";
-import { withTerminal } from "./withTerminal.ts";
 
 /** A document from plain strings — one unstyled run per line. */
 function doc(...texts: string[]): LineElement[] {
@@ -30,10 +31,21 @@ function box(topRow: number, bottomRow: number, startColumn: number, endColumn: 
   return { topRow, bottomRow, startColumn, endColumn };
 }
 
+/**
+ * A ProseMirror view over a document, headless.
+ *
+ * The commands take a view rather than a state because they dispatch — which is
+ * the honest shape, since every one of them is an edit. jsdom is enough of a DOM
+ * for a view that is never looked at.
+ */
 function editorWith(lines: LineElement[]) {
-  const editor = withTerminal(createEditor(), () => []);
-  editor.children = lines;
-  return editor;
+  const place = document.createElement("div");
+  return new EditorView(place, { state: EditorState.create({ doc: documentToNode(lines) }) });
+}
+
+/** The document as `[text, marks]` per leaf, read back out of the view. */
+function leavesOf(view: EditorView) {
+  return leaves(nodeToDocument(view.state.doc));
 }
 
 /** The document as `[text, marks]` per leaf, per line. */
@@ -140,14 +152,23 @@ describe("boxSpans", () => {
 });
 
 describe("boxRanges", () => {
-  it("addresses the right child when a line has several runs", () => {
-    const lines: LineElement[] = [
+  /**
+   * This used to assert a `[path, offset]` pair per edge and existed because
+   * getting the *child* right was the hard part — a column had to be walked into
+   * whichever run contained it. ProseMirror counts a document in flat integers,
+   * so run boundaries stop being a thing that can be got wrong, and what is left
+   * worth pinning is that a column still lands on the character it names.
+   */
+  it("counts a column to the same character however the line is cut into runs", () => {
+    const asOneRun: LineElement[] = [{ type: "line", children: [{ text: "redgreenblue" }] }];
+    const asThree: LineElement[] = [
       { type: "line", children: [{ text: "red" }, { text: "green", fg: "green" }, { text: "blue" }] },
     ];
-    // Columns 4..9 straddle the second and third runs.
-    expect(boxRanges(lines, 80, box(0, 0, 4, 9))).toEqual([
-      { anchor: { path: [0, 1], offset: 1 }, focus: { path: [0, 2], offset: 1 } },
-    ]);
+    // A line node costs one token to enter, so column 4 is position 5.
+    expect(boxRanges(asThree, 80, box(0, 0, 4, 9))).toEqual([{ from: 5, to: 10 }]);
+    expect(boxRanges(asOneRun, 80, box(0, 0, 4, 9))).toEqual(boxRanges(asThree, 80, box(0, 0, 4, 9)));
+    // And it is the characters the columns name.
+    expect(boxText(asThree, 80, box(0, 0, 4, 9))).toBe("reenb");
   });
 });
 
@@ -225,7 +246,7 @@ describe("commands over a box", () => {
     const target = box(0, 1, 6, 11);
     setBoxColor(editor, boxRanges(lines, 80, target), "fg", "green");
 
-    expect(leaves(editor.children as LineElement[])).toEqual([
+    expect(leavesOf(editor)).toEqual([
       [["alpha ", {}], ["bravo", { fg: "green" }]],
       [["gamma ", {}], ["delta", { fg: "green" }]],
     ]);
@@ -236,7 +257,7 @@ describe("commands over a box", () => {
     const editor = editorWith(lines);
     toggleBoxModifier(editor, boxRanges(lines, 80, box(0, 2, 4, 8)), "bold");
 
-    expect((editor.children as LineElement[]).map((line) => leaves([line])[0])).toEqual([
+    expect(nodeToDocument(editor.state.doc).map((line) => leaves([line])[0])).toEqual([
       [["one ", {}], ["two ", { bold: true }], ["three", {}]],
       [["four", {}], [" fiv", { bold: true }], ["e six", {}]],
       [["seve", {}], ["n ei", { bold: true }], ["ght ni", {}]],
@@ -258,7 +279,7 @@ describe("commands over a box", () => {
     const editor = editorWith(lines);
     setBoxColor(editor, boxRanges(lines, 10, box(0, 2, 2, 5)), "fg", "red");
 
-    expect(leaves(editor.children as LineElement[])).toEqual([
+    expect(leavesOf(editor)).toEqual([
       [
         ["01", {}],
         ["234", { fg: "red" }],
@@ -284,8 +305,8 @@ describe("commands over a box", () => {
     const ranges = boxRanges(lines, 80, box(0, 2, 7, 11));
     setBoxColor(editor, ranges, "fg", "red");
 
-    const after = boxRanges(editor.children as LineElement[], 80, box(0, 2, 7, 11));
-    expect(boxMarks(editor, after)).toEqual({ fg: "red" });
+    const after = boxRanges(nodeToDocument(editor.state.doc), 80, box(0, 2, 7, 11));
+    expect(boxMarks(editor.state.doc, after)).toEqual({ fg: "red" });
   });
 
   it("still intersects across the rows the box actually covers", () => {
@@ -294,16 +315,16 @@ describe("commands over a box", () => {
     const ranges = boxRanges(lines, 80, box(0, 1, 2, 5));
     setBoxColor(editor, ranges, "fg", "red");
     // Only the first row gets bold, so the two rows no longer agree on it.
-    toggleBoxModifier(editor, boxRanges(editor.children as LineElement[], 80, box(0, 0, 2, 5)), "bold");
+    toggleBoxModifier(editor, boxRanges(nodeToDocument(editor.state.doc), 80, box(0, 0, 2, 5)), "bold");
 
-    const after = boxRanges(editor.children as LineElement[], 80, box(0, 1, 2, 5));
-    expect(boxMarks(editor, after)).toEqual({ fg: "red" });
+    const after = boxRanges(nodeToDocument(editor.state.doc), 80, box(0, 1, 2, 5));
+    expect(boxMarks(editor.state.doc, after)).toEqual({ fg: "red" });
   });
 
   it("reports nothing for a box that covers no text at all", () => {
     const lines = doc("hi", "yo");
     const editor = editorWith(lines);
-    expect(boxMarks(editor, boxRanges(lines, 80, box(0, 1, 20, 24)))).toEqual({});
+    expect(boxMarks(editor.state.doc, boxRanges(lines, 80, box(0, 1, 20, 24)))).toEqual({});
   });
 
   it("leaves a short line untouched when the box overhangs it", () => {
@@ -311,7 +332,7 @@ describe("commands over a box", () => {
     const editor = editorWith(lines);
     setBoxColor(editor, boxRanges(lines, 80, box(0, 2, 7, 11)), "fg", "red");
 
-    expect(leaves(editor.children as LineElement[])[1]).toEqual([["hi", {}]]);
+    expect(leavesOf(editor)[1]).toEqual([["hi", {}]]);
   });
 
   it("toggles a modifier off when every cell already carries it", () => {
@@ -322,7 +343,7 @@ describe("commands over a box", () => {
     const editor = editorWith(lines);
     toggleBoxModifier(editor, boxRanges(lines, 80, box(0, 1, 0, 3)), "bold");
 
-    expect(leaves(editor.children as LineElement[])).toEqual([[["abc", {}]], [["def", {}]]]);
+    expect(leavesOf(editor)).toEqual([[["abc", {}]], [["def", {}]]]);
   });
 
   it("clears every mark in the box and none outside it", () => {
@@ -332,7 +353,7 @@ describe("commands over a box", () => {
     const editor = editorWith(lines);
     clearBoxFormatting(editor, boxRanges(lines, 80, box(0, 0, 4, 8)));
 
-    expect(leaves(editor.children as LineElement[])).toEqual([
+    expect(leavesOf(editor)).toEqual([
       [["keep", { fg: "red", bold: true }], ["drop", {}]],
     ]);
   });
@@ -342,7 +363,7 @@ describe("commands over a box", () => {
     const editor = editorWith(lines);
     deleteBox(editor, boxRanges(lines, 80, box(0, 1, 3, 6)));
 
-    expect((editor.children as LineElement[]).map((line) =>
+    expect(nodeToDocument(editor.state.doc).map((line) =>
       line.children.map((child) => child.text).join(""),
     )).toEqual(["aaabbb", "cccddd"]);
   });

@@ -1,38 +1,35 @@
-import { createEditor, type Descendant } from "slate";
 import { describe, expect, it } from "vitest";
+import type { ParsedLine } from "../core/ansi.ts";
+import { parsedLinesToDocument } from "../core/document.ts";
+import { documentToNode, nodeToDocument } from "./schema.ts";
 import { TERMINAL_APP_2_15, TERMINAL_APP_2_15_RTF } from "../core/clipboard-fixtures.ts";
 import { DEFAULT_THEME } from "../core/themes.ts";
-import { withTerminal } from "./withTerminal.ts";
+import { parseClipboard } from "./paste.ts";
 
 /** A clipboard carrying exactly the flavours named, and nothing else. */
 function transfer(flavours: Record<string, string>): DataTransfer {
   return { getData: (type: string) => flavours[type] ?? "" } as unknown as DataTransfer;
 }
 
-function paste(flavours: Record<string, string>): Descendant[] {
-  const editor = withTerminal(createEditor(), () => DEFAULT_THEME.ansi);
-  editor.children = [{ type: "line", children: [{ text: "" }] }];
-  editor.selection = {
-    anchor: { path: [0, 0], offset: 0 },
-    focus: { path: [0, 0], offset: 0 },
-  };
-  editor.insertData(transfer(flavours));
-  return editor.children;
+function paste(flavours: Record<string, string>): ParsedLine[] {
+  return parseClipboard(transfer(flavours), DEFAULT_THEME.ansi) ?? [];
 }
 
-/** Every leaf in the document, as `[text, marks]`. */
-function leaves(children: Descendant[]) {
-  return children.flatMap((line) =>
-    "children" in line
-      ? line.children.map((leaf) => {
-          const { text, ...marks } = leaf as { text: string };
-          return [text, marks] as const;
-        })
-      : [],
+/**
+ * Every leaf of the document the paste actually produces, as `[text, marks]`.
+ *
+ * Through the editor's own model rather than straight off the parse, because
+ * that is where adjacent runs carrying identical marks are merged. Whether a
+ * particular parser emitted one run or three for the same styled text is not a
+ * difference anyone can see, and comparing before the merge would fail on it.
+ */
+function leaves(lines: ParsedLine[]) {
+  return nodeToDocument(documentToNode(parsedLinesToDocument(lines))).flatMap((line) =>
+    line.children.map(({ text, ...marks }) => [text, marks] as const),
   );
 }
 
-describe("withTerminal paste", () => {
+describe("clipboard flavour priority", () => {
   it("keeps the colors when only text/rtf is on the clipboard", () => {
     // The case off macOS: nothing converted the RTF for us, so if we do not
     // parse it the paste arrives bare.

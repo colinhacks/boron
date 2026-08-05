@@ -1,53 +1,77 @@
-import { Editor, Range, Text } from "slate";
-import type { Color, Marks, ModifierKey } from "../core/types.ts";
+import { toggleMark } from "prosemirror-commands";
+import type { EditorState } from "prosemirror-state";
+import type { EditorView } from "prosemirror-view";
+import { MODIFIER_KEYS, type Color, type Marks, type ModifierKey } from "../core/types.ts";
+import { marksOf, terminalSchema } from "./schema.ts";
 
-const MARK_KEYS = [
-  "fg",
-  "bg",
-  "bold",
-  "dim",
-  "italic",
-  "underline",
-  "strikethrough",
-  "inverse",
-  "hidden",
-] as const satisfies readonly (keyof Marks)[];
+const MARK_KEYS = [...MODIFIER_KEYS, "fg", "bg"] as const satisfies readonly (keyof Marks)[];
 
 /**
  * What the toolbar should show as active. Over a range, a mark only counts as
- * active when *every* text node in it agrees — otherwise a selection spanning
- * red and green would claim to be red.
+ * active when *every* run in it agrees — otherwise a selection spanning red and
+ * green would claim to be red.
  */
-export function activeMarks(editor: Editor): Marks {
-  const { selection } = editor;
-  if (!selection || Range.isCollapsed(selection)) return (Editor.marks(editor) ?? {}) as Marks;
+export function activeMarks(state: EditorState): Marks {
+  const { selection } = state;
+  if (selection.empty) return marksOf(state.storedMarks ?? selection.$from.marks());
 
-  const nodes = Array.from(Editor.nodes(editor, { match: Text.isText, voids: true }));
   let common: Marks | null = null;
-
-  for (const [node] of nodes) {
-    const { text: _text, ...marks } = node;
+  state.doc.nodesBetween(selection.from, selection.to, (node) => {
+    if (!node.isText) return;
+    const marks = marksOf(node.marks);
     if (common === null) {
-      common = { ...marks } as Marks;
-      continue;
+      common = { ...marks };
+      return;
     }
     for (const key of MARK_KEYS) {
-      if (common[key] !== (marks as Marks)[key]) delete common[key];
+      if (common[key] !== marks[key]) delete common[key];
     }
-  }
+  });
   return common ?? {};
 }
 
-export function setColor(editor: Editor, key: "fg" | "bg", color: Color | null): void {
-  if (color === null) Editor.removeMark(editor, key);
-  else Editor.addMark(editor, key, color);
+export function toggleModifier(view: EditorView, key: ModifierKey): void {
+  toggleMark(terminalSchema.marks[key]!)(view.state, view.dispatch);
+  view.focus();
 }
 
-export function toggleModifier(editor: Editor, key: ModifierKey): void {
-  if (activeMarks(editor)[key] === true) Editor.removeMark(editor, key);
-  else Editor.addMark(editor, key, true);
+/**
+ * Colours are *set* rather than toggled: picking red over green means red, not
+ * nothing. `toggleMark` would clear it when the run already carried a colour.
+ */
+export function setColor(view: EditorView, key: "fg" | "bg", color: Color | null): void {
+  const type = terminalSchema.marks[key]!;
+  const { state } = view;
+  const { selection } = state;
+
+  if (selection.empty) {
+    // Nothing selected: the choice applies to whatever is typed next.
+    const kept = (state.storedMarks ?? selection.$from.marks()).filter((mark) => mark.type !== type);
+    view.dispatch(state.tr.setStoredMarks(color === null ? kept : [...kept, type.create({ color })]));
+    view.focus();
+    return;
+  }
+
+  const tr = state.tr.removeMark(selection.from, selection.to, type);
+  if (color !== null) tr.addMark(selection.from, selection.to, type.create({ color }));
+  view.dispatch(tr);
+  view.focus();
 }
 
-export function clearFormatting(editor: Editor): void {
-  for (const key of MARK_KEYS) Editor.removeMark(editor, key);
+export function clearFormatting(view: EditorView): void {
+  const { state } = view;
+  const { selection } = state;
+
+  if (selection.empty) {
+    view.dispatch(state.tr.setStoredMarks([]));
+    view.focus();
+    return;
+  }
+
+  const tr = state.tr;
+  for (const key of MARK_KEYS) {
+    tr.removeMark(selection.from, selection.to, terminalSchema.marks[key]!);
+  }
+  view.dispatch(tr);
+  view.focus();
 }

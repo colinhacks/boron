@@ -7,8 +7,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Range } from "slate";
-import { ReactEditor, useSlate } from "slate-react";
 import type { LineElement } from "../core/document.ts";
 import {
   boxRanges,
@@ -16,10 +14,12 @@ import {
   isEmptyBox,
   normalizeBox,
   visualRows,
+  type BoxRange,
   type BoxSelection,
   type BoxSpan,
   type Grid,
 } from "./box.ts";
+import { useEditorView } from "./context.tsx";
 
 interface BoxSelectionValue {
   /** The live rectangle, or `null` when the ordinary linear selection is in charge. */
@@ -27,7 +27,7 @@ interface BoxSelectionValue {
   /** The runs it covers, one per row, already clipped to the text that's there. */
   spans: BoxSpan[];
   /** Those same runs as ranges — what the commands take. */
-  ranges: Range[];
+  ranges: BoxRange[];
   /** How many cells wide the terminal is. The box's coordinates are in these. */
   columns: number;
   /** The character grid in client coordinates, or `null` before there is one to measure. */
@@ -47,6 +47,12 @@ const BoxSelectionContext = createContext<BoxSelectionValue>({
 });
 
 export interface BoxSelectionProviderProps {
+  /**
+   * The document the box is measured against. Passed in rather than read off the
+   * editor: the rectangle is geometry over lines of text, and nothing about it
+   * needs to know which editor produced them.
+   */
+  lines: readonly LineElement[];
   /** Terminal width in cells — where rows wrap, and how far right a box may reach. */
   columns: number;
   /** One cell's advance, unscaled. The whole coordinate system rests on it. */
@@ -75,13 +81,14 @@ export interface BoxSelectionProviderProps {
  * highlight can never address a node that has since been split or deleted.
  */
 export function BoxSelectionProvider({
+  lines,
   columns,
   charWidth,
   lineHeight,
   padding,
   children,
 }: BoxSelectionProviderProps) {
-  const editor = useSlate();
+  const { view } = useEditorView();
   const [box, setBoxState] = useState<BoxSelection | null>(null);
 
   const setBox = useCallback((next: BoxSelection | null) => {
@@ -104,13 +111,9 @@ export function BoxSelectionProvider({
    */
   const measureGrid = useCallback((): Grid | null => {
     if (charWidth <= 0 || lineHeight <= 0) return null;
-    let node: HTMLElement;
-    try {
-      node = ReactEditor.toDOMNode(editor, editor);
-    } catch {
-      // No editable mounted yet — the font is still loading.
-      return null;
-    }
+    // No editable mounted yet — the font is still loading.
+    const node = view?.dom as HTMLElement | undefined;
+    if (!node) return null;
     const rect = node.getBoundingClientRect();
     const scale = node.offsetWidth > 0 ? rect.width / node.offsetWidth : 1;
     if (!Number.isFinite(scale) || scale <= 0) return null;
@@ -120,13 +123,10 @@ export function BoxSelectionProvider({
       charWidth: charWidth * scale,
       lineHeight: lineHeight * scale,
       columns,
-      rowCount: visualRows(editor.children as LineElement[], columns).length,
+      rowCount: visualRows(lines, columns).length,
     };
-  }, [editor, charWidth, lineHeight, padding, columns]);
+  }, [view, lines, charWidth, lineHeight, padding, columns]);
 
-  // `editor.children` is replaced on every content change, so it is a sound
-  // dependency even though the editor object itself never changes identity.
-  const lines = editor.children as LineElement[];
   const spans = useMemo(() => (box ? boxSpans(lines, columns, box) : []), [box, columns, lines]);
   const ranges = useMemo(() => (box ? boxRanges(lines, columns, box) : []), [box, columns, lines]);
 

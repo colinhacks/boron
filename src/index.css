@@ -1,3 +1,4 @@
+@import "prosemirror-view/style/prosemirror.css";
 :root {
   --bg: #08090d;
   --bg-elev: #0e1016;
@@ -457,6 +458,24 @@ input {
 }
 
 .terminal-editable {
+  outline: none;
+}
+
+/*
+ * ProseMirror injects its own base rules, and two of them are wrong for a
+ * terminal. `white-space: pre-wrap` and `word-wrap: break-word` would reflow the
+ * block, which neither a terminal nor the exported image does — and the layout
+ * measured for the export assumes they do not. The invariant is in
+ * wiki/architecture.md; this is where it is actually held.
+ */
+.terminal-surface .ProseMirror {
+  /* Inherit the wrapping the surface sets; ProseMirror's own base rule is
+     `white-space: pre-wrap`, which breaks at word boundaries the export knows
+     nothing about. */
+  white-space: inherit;
+  line-break: inherit;
+  word-break: inherit;
+  overflow-wrap: inherit;
   outline: none;
 }
 

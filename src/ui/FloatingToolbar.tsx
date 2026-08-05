@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Editor, Range } from "slate";
-import { ReactEditor, useSlate } from "slate-react";
 import type { Theme } from "../core/themes.ts";
+import { useEditorView } from "../editor/context.tsx";
 import { boxRect } from "../editor/box.ts";
 import { useBoxSelection } from "../editor/BoxSelection.tsx";
 import { Toolbar } from "./Toolbar.tsx";
 
 const GAP = 10;
+
+/** All `sync` needs of a highlight. A `DOMRect` satisfies it, and so does a box. */
+interface Anchor {
+  left: number;
+  top: number;
+  bottom: number;
+}
 
 /**
  * The formatting controls, floating over whatever you have selected.
@@ -17,7 +23,7 @@ const GAP = 10;
  * still be measured while off-screen.
  */
 export function FloatingToolbar({ theme }: { theme: Theme }) {
-  const editor = useSlate();
+  const { view } = useEditorView();
   const { box, spans, measureGrid } = useBoxSelection();
   const ref = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(false);
@@ -30,37 +36,41 @@ export function FloatingToolbar({ theme }: { theme: Theme }) {
    * selection while it is up, so every test below it would fail on a rectangle
    * that is plainly there on screen.
    */
-  const anchorRect = useCallback((): DOMRect | null => {
+  const anchorRect = useCallback((): Anchor | null => {
     if (box) {
       if (spans.length === 0) return null;
       const grid = measureGrid();
       return grid ? boxRect(grid, box) : null;
     }
 
-    const { selection } = editor;
-    if (
-      !selection ||
-      Range.isCollapsed(selection) ||
-      !ReactEditor.isFocused(editor) ||
-      Editor.string(editor, selection) === ""
-    ) {
+    if (!view) return null;
+    const { selection } = view.state;
+    if (selection.empty || !view.hasFocus() || view.state.doc.textBetween(selection.from, selection.to) === "") {
       return null;
     }
 
     // The model can outlive what's actually highlighted — Slate keeps its last
     // selection when focus leaves, and a browser can drop the native one without
-    // telling it. Trust the DOM for "is anything still selected", so the toolbar
+    // telling it either. Trust the DOM for "is anything still selected", so the toolbar
     // never hangs around over nothing.
     const domSelection = window.getSelection();
     if (!domSelection || domSelection.rangeCount === 0 || domSelection.isCollapsed) return null;
 
     try {
-      return ReactEditor.toDOMRange(editor, selection).getBoundingClientRect();
+      // `coordsAtPos` is viewport-relative like a DOMRect, and unlike a DOM range
+      // it stays correct where the selection spans several lines.
+      const start = view.coordsAtPos(selection.from);
+      const end = view.coordsAtPos(selection.to);
+      return {
+        left: Math.min(start.left, end.left),
+        top: Math.min(start.top, end.top),
+        bottom: Math.max(start.bottom, end.bottom),
+      };
     } catch {
       // The DOM can lag the model for a tick after a paste or an undo.
       return null;
     }
-  }, [editor, box, spans, measureGrid]);
+  }, [view, box, spans, measureGrid]);
 
   const sync = useCallback(() => {
     const element = ref.current;
@@ -92,7 +102,7 @@ export function FloatingToolbar({ theme }: { theme: Theme }) {
     // Scrolling and resizing move the anchor without changing the editor.
     //
     // Losing focus is the one that actually bites: blurring the editor produces
-    // no Slate operation, so `useSlate` never re-renders us and the toolbar
+    // no transaction, so nothing re-renders us and the toolbar
     // outlives the selection it belongs to — it just sits there after you click
     // away. Focus events are deferred a frame because slate-react clears its own
     // focus flag in a handler that has not necessarily run yet.

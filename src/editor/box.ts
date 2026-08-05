@@ -1,4 +1,7 @@
-import { Editor, Text, Transforms, type Range, type Point } from "slate";
+import type { Node as PMNode } from "prosemirror-model";
+import type { Transaction } from "prosemirror-state";
+import type { EditorView } from "prosemirror-view";
+import { marksOf, terminalSchema } from "./schema.ts";
 import { lineText, type LineElement, type StyledText } from "../core/document.ts";
 import type { Color, Marks, ModifierKey } from "../core/types.ts";
 
@@ -148,17 +151,20 @@ function offsetOfColumn(text: string, column: number): number {
 }
 
 /** Turn a UTF-16 offset into a line into the Slate point that addresses it. */
-function pointAt(line: LineElement, index: number, offset: number): Point {
-  let remaining = offset;
-  for (let child = 0; child < line.children.length; child += 1) {
-    const length = line.children[child]!.text.length;
-    if (remaining <= length) return { path: [index, child], offset: remaining };
-    remaining -= length;
+/**
+ * The ProseMirror position of a character, counted from the document start.
+ *
+ * A line node costs one token to enter and one to leave, so every line before
+ * this one contributes its text plus two. Slate needed a `[path, offset]` pair
+ * and a walk over the line's children to find which run an offset fell in;
+ * positions are flat, which is most of why this port shrank rather than grew.
+ */
+function positionAt(lines: readonly LineElement[], index: number, offset: number): number {
+  let position = 1;
+  for (let line = 0; line < index; line += 1) {
+    position += lineText(lines[line]!).length + 2;
   }
-  // Past the end of every child — pin to the end of the last one. A line always
-  // has at least one child, which `normalizeNode` guarantees.
-  const last = Math.max(0, line.children.length - 1);
-  return { path: [index, last], offset: line.children[last]?.text.length ?? 0 };
+  return position + offset;
 }
 
 export function normalizeBox(box: BoxSelection): BoxSelection {
@@ -236,15 +242,25 @@ export function boxSpans(
 }
 
 /** Those same runs as Slate ranges — what the commands operate on. */
+/** One row of the rectangle, as a pair of document positions. */
+export interface BoxRange {
+  from: number;
+  to: number;
+}
+
 export function boxRanges(
   lines: readonly LineElement[],
   columns: number,
   box: BoxSelection,
-): Range[] {
+): BoxRange[] {
   return boxSpans(lines, columns, box).flatMap((span) => {
-    const line = lines[span.line];
-    if (!line) return [];
-    return [{ anchor: pointAt(line, span.line, span.start), focus: pointAt(line, span.line, span.end) }];
+    if (!lines[span.line]) return [];
+    return [
+      {
+        from: positionAt(lines, span.line, span.start),
+        to: positionAt(lines, span.line, span.end),
+      },
+    ];
   });
 }
 
@@ -308,88 +324,77 @@ const MARK_KEYS = [
  * Same rule as a linear selection: a mark only counts as active when the whole
  * selection carries it, so a box spanning red and green claims neither.
  */
-export function boxMarks(editor: Editor, ranges: readonly Range[]): Marks {
+export function boxMarks(doc: PMNode, ranges: readonly BoxRange[]): Marks {
   let common: Marks | null = null;
 
   for (const range of ranges) {
-    // `Editor.fragment` cuts at the range's own edges. `Editor.nodes` does not:
-    // it yields every node the range *touches*, which is two too many. A box
-    // over the middle of a line picks up the unstyled runs either side of it and
-    // intersects them in, so a colour that had just been applied to every
-    // covered cell reported as not applied at all — the toolbar showed nothing
-    // selected for a change the user had watched happen.
-    for (const line of Editor.fragment(editor, range)) {
-      for (const child of (line as LineElement).children) {
-        // A row the box only overhangs slices to nothing. It is not part of what
-        // the box covers, so it gets no say in what the box carries.
-        if (child.text.length === 0) continue;
-        const { text: _text, ...marks } = child;
-        if (common === null) {
-          common = { ...marks } as Marks;
-          continue;
-        }
-        for (const key of MARK_KEYS) {
-          if (common[key] !== (marks as Marks)[key]) delete common[key];
-        }
+    // `slice` cuts at the range's own edges. Walking nodes that merely overlap
+    // it would fold in the runs either side, and a colour applied to every
+    // covered cell would report as agreed on by none of them.
+    doc.slice(range.from, range.to).content.descendants((node) => {
+      if (!node.isText || !node.text) return;
+      const marks = marksOf(node.marks);
+      if (common === null) {
+        common = { ...marks };
+        return;
       }
-    }
+      for (const key of MARK_KEYS) {
+        if (common[key] !== marks[key]) delete common[key];
+      }
+    });
   }
 
   return common ?? {};
 }
 
 /**
- * Apply an edit to every row of a box, last row first.
+ * Apply one transaction across every row, back to front.
  *
- * The order is the whole point. Setting a mark over part of a line splits its
- * text nodes, which renumbers the children of *that* line — so a range held
- * against a line above the one being edited is still valid, and one held against
- * the same line or a line below may not be. Walking upwards means every range is
- * used before anything could have invalidated it.
- *
- * The lot is one history entry, so undo takes the box back in a single step
- * rather than one step per row.
+ * Back to front because each row's positions are measured against the document
+ * as it was: editing an earlier row shifts every later one. ProseMirror would
+ * let us map positions forward through the transaction instead, but reversing
+ * is the same trick Slate needed and it stays obvious.
  */
-function overBox(editor: Editor, ranges: readonly Range[], apply: (range: Range) => void): void {
+function overBox(view: EditorView, ranges: readonly BoxRange[], apply: (tr: Transaction, range: BoxRange) => void): void {
   if (ranges.length === 0) return;
-  Editor.withoutNormalizing(editor, () => {
-    for (let index = ranges.length - 1; index >= 0; index -= 1) apply(ranges[index]!);
-  });
+  const tr = view.state.tr;
+  for (let index = ranges.length - 1; index >= 0; index -= 1) {
+    const range = ranges[index]!;
+    if (range.from !== range.to) apply(tr, range);
+  }
+  if (tr.docChanged) view.dispatch(tr);
 }
 
 export function setBoxColor(
-  editor: Editor,
-  ranges: readonly Range[],
+  view: EditorView,
+  ranges: readonly BoxRange[],
   key: "fg" | "bg",
   color: Color | null,
 ): void {
-  overBox(editor, ranges, (range) => {
-    if (color === null) Transforms.unsetNodes(editor, key, { at: range, match: Text.isText, split: true });
-    else Transforms.setNodes(editor, { [key]: color }, { at: range, match: Text.isText, split: true });
+  const type = terminalSchema.marks[key]!;
+  overBox(view, ranges, (tr, range) => {
+    tr.removeMark(range.from, range.to, type);
+    if (color !== null) tr.addMark(range.from, range.to, type.create({ color }));
   });
 }
 
-export function toggleBoxModifier(editor: Editor, ranges: readonly Range[], key: ModifierKey): void {
-  const active = boxMarks(editor, ranges)[key] === true;
-  overBox(editor, ranges, (range) => {
-    if (active) Transforms.unsetNodes(editor, key, { at: range, match: Text.isText, split: true });
-    else Transforms.setNodes(editor, { [key]: true }, { at: range, match: Text.isText, split: true });
+export function toggleBoxModifier(view: EditorView, ranges: readonly BoxRange[], key: ModifierKey): void {
+  const type = terminalSchema.marks[key]!;
+  const active = boxMarks(view.state.doc, ranges)[key] === true;
+  overBox(view, ranges, (tr, range) => {
+    if (active) tr.removeMark(range.from, range.to, type);
+    else tr.addMark(range.from, range.to, type.create());
   });
 }
 
-export function clearBoxFormatting(editor: Editor, ranges: readonly Range[]): void {
-  overBox(editor, ranges, (range) => {
-    Transforms.unsetNodes(editor, MARK_KEYS as unknown as string[], {
-      at: range,
-      match: Text.isText,
-      split: true,
-    });
+export function clearBoxFormatting(view: EditorView, ranges: readonly BoxRange[]): void {
+  overBox(view, ranges, (tr, range) => {
+    for (const key of MARK_KEYS) tr.removeMark(range.from, range.to, terminalSchema.marks[key]!);
   });
 }
 
-/** Cut the box's cells out, closing the gap on each row as a terminal editor would. */
-export function deleteBox(editor: Editor, ranges: readonly Range[]): void {
-  overBox(editor, ranges, (range) => {
-    Transforms.delete(editor, { at: range });
+export function deleteBox(view: EditorView, ranges: readonly BoxRange[]): void {
+  overBox(view, ranges, (tr, range) => {
+    tr.delete(range.from, range.to);
   });
 }

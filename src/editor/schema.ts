@@ -102,7 +102,8 @@ function marksFor(leaf: StyledText): Mark[] {
   return marks;
 }
 
-function marksOf(pmMarks: readonly Mark[]): Marks {
+/** The Boron marks a ProseMirror mark set carries. */
+export function marksOf(pmMarks: readonly Mark[]): Marks {
   const marks: Marks = {};
   for (const mark of pmMarks) {
     if (mark.type.name === "fg" || mark.type.name === "bg") {

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useSlate } from "slate-react";
+import { useEditorView } from "./context.tsx";
 import type { Color, Marks, ModifierKey } from "../core/types.ts";
 import { boxMarks, clearBoxFormatting, setBoxColor, toggleBoxModifier } from "./box.ts";
 import { useBoxSelection } from "./BoxSelection.tsx";
@@ -23,21 +23,31 @@ export interface Formatting {
  * nothing, not quietly redirect the click to a caret somewhere else.
  */
 export function useFormatting(): Formatting {
-  const editor = useSlate();
+  const { view } = useEditorView();
   const { box, ranges } = useBoxSelection();
   const boxed = box !== null;
 
-  const marks = boxed ? boxMarks(editor, ranges) : activeMarks(editor);
+  const marks = view ? (boxed ? boxMarks(view.state.doc, ranges) : activeMarks(view.state)) : {};
 
   const commands = useMemo<Omit<Formatting, "marks">>(
     () => ({
-      setColor: (key, color) =>
-        boxed ? setBoxColor(editor, ranges, key, color) : setColor(editor, key, color),
-      toggleModifier: (key) =>
-        boxed ? toggleBoxModifier(editor, ranges, key) : toggleModifier(editor, key),
-      clearFormatting: () => (boxed ? clearBoxFormatting(editor, ranges) : clearFormatting(editor)),
+      setColor: (key, color) => {
+        if (!view) return;
+        if (boxed) setBoxColor(view, ranges, key, color);
+        else setColor(view, key, color);
+      },
+      toggleModifier: (key) => {
+        if (!view) return;
+        if (boxed) toggleBoxModifier(view, ranges, key);
+        else toggleModifier(view, key);
+      },
+      clearFormatting: () => {
+        if (!view) return;
+        if (boxed) clearBoxFormatting(view, ranges);
+        else clearFormatting(view);
+      },
     }),
-    [editor, boxed, ranges],
+    [view, boxed, ranges],
   );
 
   return { marks, ...commands };
