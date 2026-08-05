@@ -1,4 +1,4 @@
-import { useSlate } from "slate-react";
+import { useEditorView } from "../editor/context.tsx";
 import { colorToCss } from "../core/style.ts";
 import type { Theme } from "../core/themes.ts";
 import { MODIFIER_KEYS, NAMED_COLORS, type Color, type ModifierKey, type NamedColor } from "../core/types.ts";
@@ -109,8 +109,10 @@ function SwatchRow({ label, markKey, active, theme, onPick }: SwatchRowProps) {
 }
 
 export function Toolbar({ theme }: { theme: Theme }) {
-  const editor = useSlate();
-  const marks = activeMarks(editor);
+  const { view } = useEditorView();
+  // `version` in the context is what re-renders this when the selection moves;
+  // the marks themselves are read straight off the live state.
+  const marks = view ? activeMarks(view.state) : {};
 
   return (
     <div className="toolbar" role="toolbar" aria-label="Text formatting">
@@ -119,14 +121,14 @@ export function Toolbar({ theme }: { theme: Theme }) {
         markKey="fg"
         active={marks.fg}
         theme={theme}
-        onPick={(color) => setColor(editor, "fg", color)}
+        onPick={(color) => setColor(view!, "fg", color)}
       />
       <SwatchRow
         label="Fill"
         markKey="bg"
         active={marks.bg}
         theme={theme}
-        onPick={(color) => setColor(editor, "bg", color)}
+        onPick={(color) => setColor(view!, "bg", color)}
       />
       <div className="swatch-row">
         <span className="swatch-row__label">Style</span>
@@ -140,7 +142,7 @@ export function Toolbar({ theme }: { theme: Theme }) {
                 className={`chip${marks[key] === true ? " chip--active" : ""} chip--${key}`}
                 title={`chalk.${key} · SGR ${modifier.sgr}`}
                 aria-pressed={marks[key] === true}
-                  onClick={() => toggleModifier(editor, key)}
+                onClick={() => toggleModifier(view!, key)}
               >
                 <span className="chip__label">{modifier.label}</span>
               </button>

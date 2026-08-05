@@ -1,12 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createEditor } from "slate";
-import { withHistory } from "slate-history";
-import { Slate, withReact } from "slate-react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { documentToRenderLines, type LineElement } from "./core/document.ts";
 import { toAnsi, toChalkSource, toPlainText } from "./core/serialize.ts";
 import { DEFAULT_THEME, themeById } from "./core/themes.ts";
-import { TerminalSurface } from "./editor/TerminalEditor.tsx";
-import { withTerminal } from "./editor/withTerminal.ts";
+import { EditorProvider } from "./editor/context.tsx";
+import { TerminalSurface, type TerminalHandle } from "./editor/TerminalEditor.tsx";
 import {
   DEFAULT_BACKGROUND_ID,
   TRANSPARENT_ID,
@@ -126,13 +123,15 @@ export function App() {
 
   const themeRef = useRef(theme);
   themeRef.current = theme;
+  // The paste parsers map a terminal's colours onto the active palette, so they
+  // read the theme at paste time rather than capturing it.
+  const ansi16 = useCallback(() => themeRef.current.ansi, []);
 
-  const editor = useMemo(
-    () => withTerminal(withHistory(withReact(createEditor())), () => themeRef.current.ansi),
-    [],
-  );
-
-  const initialValue = useRef(value).current;
+  const surface = useRef<TerminalHandle>(null);
+  const initialDocument = useRef(value).current;
+  // ProseMirror's state is outside React; this is what re-renders the toolbars
+  // when the selection moves.
+  const [editorVersion, noteEditorChange] = useReducer((count: number) => count + 1, 0);
 
   useEffect(() => {
     let cancelled = false;
@@ -191,13 +190,9 @@ export function App() {
     window.setTimeout(() => setToast((current) => (current === message ? null : current)), 1800);
   }, []);
 
-  const handleChange = useCallback(
-    (next: unknown) => {
-      const changedContent = editor.operations.some((operation) => operation.type !== "set_selection");
-      if (changedContent) setValue(next as LineElement[]);
-    },
-    [editor],
-  );
+  // Only fires when the document actually changed — a bare selection move does
+  // not reach here.
+  const handleChange = useCallback((next: LineElement[]) => setValue(next), []);
 
   const handleFrameChange = useCallback((patch: Partial<FrameSettings>) => {
     setFrame((current) => ({ ...current, ...patch }));
@@ -253,28 +248,13 @@ export function App() {
     else await copyAs(copyMode);
   }, [copyMode, handleCopyImage, copyAs]);
 
-  /**
-   * Swap the whole workspace out from under the editor. Slate takes its initial
-   * value once and never again, so a new document has to be pushed onto the
-   * editor by hand rather than re-rendered in.
-   */
-  const applyWorkspace = useCallback(
-    (next: Workspace) => {
-      editor.children = next.document;
-      editor.selection = null;
-      // The undo stack addresses paths in the document being replaced. Kept, it
-      // either throws on the first Cmd+Z or — worse, when the old and new shapes
-      // happen to line up — quietly rewrites the new document with the old one's
-      // edits.
-      editor.history = { undos: [], redos: [] };
-      editor.onChange();
-      setValue(next.document);
-      setThemeId(next.themeId);
-      setBackgroundId(next.backgroundId);
-      setFrame(next.frame);
-    },
-    [editor],
-  );
+  /** Swap the whole workspace out from under the editor. */
+  const applyWorkspace = useCallback((next: Workspace) => {
+    surface.current?.replaceDocument(next.document);
+    setThemeId(next.themeId);
+    setBackgroundId(next.backgroundId);
+    setFrame(next.frame);
+  }, []);
 
   /** Reset means everything — the document and every setting around it. */
   const resetAll = useCallback(() => {
@@ -383,7 +363,7 @@ export function App() {
         </div>
       </header>
 
-      <Slate editor={editor} initialValue={initialValue} onChange={handleChange}>
+      <EditorProvider value={{ view: surface.current?.view() ?? null, version: editorVersion }}>
         <main className="app-main">
           <div className="workspace">
             <FloatingToolbar theme={theme} />
@@ -452,7 +432,11 @@ export function App() {
                     ) : null}
 
                     <TerminalSurface
-                      editor={editor}
+                      handle={surface}
+                      initialDocument={initialDocument}
+                      ansi16={ansi16}
+                      onChange={handleChange}
+                      onSelectionChange={noteEditorChange}
                       theme={theme}
                       fontSize={FONT_SIZE}
                       lineHeight={layout.lineHeight}
@@ -510,7 +494,7 @@ export function App() {
             onFrameChange={handleFrameChange}
           />
         </main>
-      </Slate>
+      </EditorProvider>
 
       <div className={`toast${toast ? " toast--visible" : ""}`} role="status" aria-live="polite">
         {toast}

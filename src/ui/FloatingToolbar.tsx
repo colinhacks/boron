@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Editor, Range } from "slate";
-import { ReactEditor, useSlate } from "slate-react";
+import { useEditorView } from "../editor/context.tsx";
 import type { Theme } from "../core/themes.ts";
 import { Toolbar } from "./Toolbar.tsx";
 
@@ -15,7 +14,7 @@ const GAP = 10;
  * still be measured while off-screen.
  */
 export function FloatingToolbar({ theme }: { theme: Theme }) {
-  const editor = useSlate();
+  const { view } = useEditorView();
   const ref = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(false);
 
@@ -23,30 +22,33 @@ export function FloatingToolbar({ theme }: { theme: Theme }) {
     const element = ref.current;
     if (!element) return;
 
-    const { selection } = editor;
-    if (
-      !selection ||
-      Range.isCollapsed(selection) ||
-      !ReactEditor.isFocused(editor) ||
-      Editor.string(editor, selection) === ""
-    ) {
+    if (!view) {
+      setVisible(false);
+      return;
+    }
+    const { selection } = view.state;
+    if (selection.empty || !view.hasFocus() || view.state.doc.textBetween(selection.from, selection.to) === "") {
       setVisible(false);
       return;
     }
 
-    // The model can outlive what's actually highlighted — Slate keeps its last
-    // selection when focus leaves, and a browser can drop the native one without
-    // telling it. Trust the DOM for "is anything still selected", so the toolbar
-    // never hangs around over nothing.
+    // The model can outlive what's actually highlighted — the editor keeps its
+    // last selection when focus leaves, and a browser can drop the native one
+    // without telling it. Trust the DOM for "is anything still selected", so the
+    // toolbar never hangs around over nothing.
     const domSelection = window.getSelection();
     if (!domSelection || domSelection.rangeCount === 0 || domSelection.isCollapsed) {
       setVisible(false);
       return;
     }
 
-    let rect: DOMRect;
+    let rect: { left: number; top: number; bottom: number };
     try {
-      rect = ReactEditor.toDOMRange(editor, selection).getBoundingClientRect();
+      // `coordsAtPos` is viewport-relative, like a DOMRect, and unlike a DOM
+      // range it works even where the selection spans several lines.
+      const start = view.coordsAtPos(selection.from);
+      const end = view.coordsAtPos(selection.to);
+      rect = { left: Math.min(start.left, end.left), top: Math.min(start.top, end.top), bottom: Math.max(start.bottom, end.bottom) };
     } catch {
       // The DOM can lag the model for a tick after a paste or an undo.
       setVisible(false);
@@ -64,7 +66,7 @@ export function FloatingToolbar({ theme }: { theme: Theme }) {
     const top = above > GAP ? above : rect.bottom + GAP;
     element.style.left = `${left + window.scrollX}px`;
     element.style.top = `${top + window.scrollY}px`;
-  }, [editor]);
+  }, [view]);
 
   // Every editor change — which is what keeps the toolbar over the selection.
   useEffect(sync);
@@ -73,10 +75,10 @@ export function FloatingToolbar({ theme }: { theme: Theme }) {
     // Scrolling and resizing move the anchor without changing the editor.
     //
     // Losing focus is the one that actually bites: blurring the editor produces
-    // no Slate operation, so `useSlate` never re-renders us and the toolbar
-    // outlives the selection it belongs to — it just sits there after you click
-    // away. Focus events are deferred a frame because slate-react clears its own
-    // focus flag in a handler that has not necessarily run yet.
+    // no transaction, so nothing re-renders us and the toolbar outlives the
+    // selection it belongs to — it just sits there after you click away. Focus
+    // events are deferred a frame because the view clears its own focus flag in
+    // a handler that has not necessarily run yet.
     const soon = () => requestAnimationFrame(sync);
     window.addEventListener("scroll", sync, true);
     window.addEventListener("resize", sync);
