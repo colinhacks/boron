@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@nubjs/types": ">=0.4.13 <=0.6.0",
+    "@types/culori": "^4.0.1",
     "@types/node": "^26",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
@@ -32,6 +33,7 @@
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.3.0",
+    "culori": "^4.0.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "slate": "^0.126.0",

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { THEMES, type Theme } from "../core/themes.ts";
 import { BACKGROUNDS, TRANSPARENT_ID, backgroundCss, type Background } from "../export/background.ts";
+import { themedBackground } from "../export/backdrop.ts";
 import { MAX_TITLE_LENGTH, type FrameSettings } from "../export/layout.ts";
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
@@ -117,7 +118,9 @@ export function Sidebar({
               aria-label={candidate.name}
               aria-pressed={background?.id === candidate.id}
               className={`background-swatch${background?.id === candidate.id ? " background-swatch--active" : ""}`}
-              style={{ background: backgroundCss(candidate) }}
+              // Shown as it will actually render behind the current theme —
+              // a swatch of the authored stops would promise the wrong picture.
+              style={{ background: backgroundCss(themedBackground(candidate, theme)) }}
               onClick={() => onBackgroundChange(candidate.id)}
             />
           ))}

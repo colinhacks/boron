@@ -13,6 +13,7 @@ import {
   backgroundById,
   backgroundCss,
 } from "./export/background.ts";
+import { themedBackground } from "./export/backdrop.ts";
 import { FONT_FAMILY, ensureFontsLoaded } from "./export/fonts.ts";
 import {
   IMAGE_FORMATS,
@@ -104,7 +105,13 @@ export function App() {
   const [previewScale, setPreviewScale] = useState(1);
 
   const theme = useMemo(() => themeById(themeId), [themeId]);
-  const background = useMemo(() => backgroundById(backgroundId), [backgroundId]);
+  // Adapted here rather than at each place it is drawn, so the preview, the
+  // canvas exporter and the SVG exporter all get the themed stops without
+  // knowing that backdrops adapt at all.
+  const background = useMemo(
+    () => themedBackground(backgroundById(backgroundId), theme),
+    [backgroundId, theme],
+  );
 
   const themeRef = useRef(theme);
   themeRef.current = theme;
