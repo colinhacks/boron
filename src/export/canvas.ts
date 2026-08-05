@@ -1,7 +1,7 @@
-import { gradientEndpoints } from "./background.ts";
 import { ensureFontsLoaded } from "./fonts.ts";
-import { fontString, trafficLights } from "./layout.ts";
-import { CHROME_TITLE_SCALE, chromeBorderColor, chromeTitleColor, resolveShadow, type Scene } from "./scene.ts";
+import { fontString } from "./layout.ts";
+import { buildOps, isGradient, type Op, type Paint } from "./paint.ts";
+import type { Scene } from "./scene.ts";
 
 function roundedRect(
   ctx: CanvasRenderingContext2D,
@@ -25,101 +25,71 @@ function roundedRect(
   ctx.closePath();
 }
 
-/**
- * `opaqueBackdrop` is painted after the clear and beneath everything else, for
- * formats with no alpha channel — without it a transparent backdrop encodes as
- * black rather than as the terminal's own color.
- */
+function fillStyle(ctx: CanvasRenderingContext2D, paint: Paint): string | CanvasGradient {
+  if (!isGradient(paint)) return paint;
+  const gradient = ctx.createLinearGradient(paint.x0, paint.y0, paint.x1, paint.y1);
+  paint.stops.forEach((stop, index) => {
+    gradient.addColorStop(paint.stops.length === 1 ? 0 : index / (paint.stops.length - 1), stop);
+  });
+  return gradient;
+}
+
+function paint(ctx: CanvasRenderingContext2D, ops: readonly Op[]): void {
+  for (const op of ops) {
+    switch (op.op) {
+      case "fill":
+        ctx.fillStyle = fillStyle(ctx, op.paint);
+        ctx.fillRect(op.x, op.y, op.width, op.height);
+        break;
+
+      case "panel":
+        // A canvas shadow is a property of a fill rather than of a shape, so the
+        // panel is filled twice: once to cast, once to cover the blur that lands
+        // inside its own edges.
+        if (op.shadow) {
+          ctx.save();
+          ctx.shadowColor = `rgba(0, 0, 0, ${op.shadow.opacity})`;
+          ctx.shadowBlur = op.shadow.stdDeviation * 2;
+          ctx.shadowOffsetY = op.shadow.offsetY;
+          ctx.fillStyle = op.fill;
+          roundedRect(ctx, op.x, op.y, op.width, op.height, op.radius);
+          ctx.fill();
+          ctx.restore();
+        }
+        ctx.fillStyle = op.fill;
+        roundedRect(ctx, op.x, op.y, op.width, op.height, op.radius);
+        ctx.fill();
+        break;
+
+      case "circle":
+        ctx.beginPath();
+        ctx.arc(op.cx, op.cy, op.r, 0, Math.PI * 2);
+        ctx.fillStyle = op.fill;
+        ctx.fill();
+        break;
+
+      case "text":
+        ctx.font = fontString(op.size, op.bold, op.italic);
+        ctx.fillStyle = op.fill;
+        ctx.textAlign = op.centered ? "center" : "left";
+        ctx.textBaseline = op.centered ? "middle" : "alphabetic";
+        ctx.fillText(op.text, op.x, op.y);
+        break;
+
+      case "clip":
+        ctx.save();
+        roundedRect(ctx, op.x, op.y, op.width, op.height, op.radius);
+        ctx.clip();
+        paint(ctx, op.children);
+        ctx.restore();
+        break;
+    }
+  }
+}
+
 export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene, opaqueBackdrop?: string): void {
-  const { layout, frame, theme, background } = scene;
-  const { terminal } = layout;
-
-  ctx.clearRect(0, 0, layout.width, layout.height);
-
-  if (opaqueBackdrop) {
-    ctx.fillStyle = opaqueBackdrop;
-    ctx.fillRect(0, 0, layout.width, layout.height);
-  }
-
-  if (background) {
-    const { x0, y0, x1, y1 } = gradientEndpoints(background.angle, layout.width, layout.height);
-    const gradient = ctx.createLinearGradient(x0, y0, x1, y1);
-    background.stops.forEach((stop, index) => {
-      gradient.addColorStop(background.stops.length === 1 ? 0 : index / (background.stops.length - 1), stop);
-    });
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, layout.width, layout.height);
-  }
-
-  const shadow = resolveShadow(frame.shadowStrength);
-  if (shadow) {
-    ctx.save();
-    ctx.shadowColor = `rgba(0, 0, 0, ${shadow.opacity})`;
-    ctx.shadowBlur = shadow.stdDeviation * 2;
-    ctx.shadowOffsetY = shadow.offsetY;
-    ctx.fillStyle = theme.background;
-    roundedRect(ctx, terminal.x, terminal.y, terminal.width, terminal.height, frame.radius);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  ctx.fillStyle = theme.background;
-  roundedRect(ctx, terminal.x, terminal.y, terminal.width, terminal.height, frame.radius);
-  ctx.fill();
-
-  ctx.save();
-  roundedRect(ctx, terminal.x, terminal.y, terminal.width, terminal.height, frame.radius);
-  ctx.clip();
-
-  if (frame.showChrome) {
-    ctx.fillStyle = chromeBorderColor(theme);
-    ctx.fillRect(terminal.x, terminal.y + layout.chromeHeight - 1, terminal.width, 1);
-
-    for (const light of trafficLights(layout, frame)) {
-      ctx.beginPath();
-      ctx.arc(light.cx, light.cy, light.r, 0, Math.PI * 2);
-      ctx.fillStyle = light.fill;
-      ctx.fill();
-    }
-
-    if (frame.title) {
-      ctx.font = fontString(layout.fontSize * CHROME_TITLE_SCALE, false, false);
-      ctx.fillStyle = chromeTitleColor(theme);
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(frame.title, terminal.x + terminal.width / 2, terminal.y + layout.chromeHeight / 2);
-      ctx.textAlign = "left";
-    }
-  }
-
-  ctx.textBaseline = "alphabetic";
-  for (const line of layout.lines) {
-    for (const span of line.spans) {
-      if (!span.style.background) continue;
-      ctx.fillStyle = span.style.background;
-      ctx.fillRect(terminal.x + span.x, terminal.y + line.top, span.width, layout.lineHeight);
-    }
-    for (const span of line.spans) {
-      if (span.style.opacity === 0) continue;
-      ctx.globalAlpha = span.style.opacity;
-      ctx.fillStyle = span.style.color;
-      ctx.font = fontString(layout.fontSize, span.style.bold, span.style.italic);
-      const x = terminal.x + span.x;
-      const y = terminal.y + line.baseline;
-      ctx.fillText(span.text, x, y);
-
-      const thickness = Math.max(1, Math.round(layout.fontSize / 14));
-      if (span.style.underline) {
-        ctx.fillRect(x, y + layout.fontSize * 0.14, span.width, thickness);
-      }
-      if (span.style.strikethrough) {
-        ctx.fillRect(x, y - layout.fontSize * 0.28, span.width, thickness);
-      }
-      ctx.globalAlpha = 1;
-    }
-  }
-
-  ctx.restore();
+  ctx.clearRect(0, 0, scene.layout.width, scene.layout.height);
+  paint(ctx, buildOps(scene, opaqueBackdrop));
 }
 
 export async function renderToCanvas(scene: Scene, scale: number, opaqueBackdrop?: string): Promise<HTMLCanvasElement> {

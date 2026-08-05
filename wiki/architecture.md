@@ -13,7 +13,7 @@ Source is four layers, and the dependency arrows only point one way:
 | Layer | What lives there | Depends on |
 | --- | --- | --- |
 | [src/core/](../src/core) | The pure model: ANSI parsing, the document shape, the palette, themes, the prompt heuristic, mark resolution, serialization back out to ANSI/chalk/text | nothing outside itself |
-| [src/export/](../src/export) | Layout measurement, the canvas and SVG renderers, backdrops, the bundled font | `core` |
+| [src/export/](../src/export) | Layout measurement, the shared display list, the canvas and SVG backends, backdrops, the bundled font | `core` |
 | [src/editor/](../src/editor) | The Slate integration: paste handling, normalization, decorations, the leaf renderer | `core`, plus `export/fonts.ts` for the family string |
 | [src/ui/](../src/ui) | Chrome: sidebar, toolbars, split buttons, logo, the sample document | `core`, `export`, `editor` |
 
@@ -26,7 +26,7 @@ Nothing in `core/` imports React, the DOM, or anything from the other three laye
 3. **The document.** `parsedLinesToDocument` in [src/core/document.ts](../src/core/document.ts) produces a `TerminalDocument` — `LineElement[]`, each with `StyledText[]` children. A `StyledText` is `Marks & { text: string }`, so styling lives directly on the Slate leaf. `Marks` ([src/core/types.ts](../src/core/types.ts)) is all-optional and absent-when-off.
 4. **Roles.** `documentToRenderLines` flattens the document into `RenderLine[]` of `RenderSpan { text, marks, role }`. It calls `classifyDocument` from [src/core/prompt.ts](../src/core/prompt.ts) over the whole document at once — two things need cross-line context: a trailing `\` continues a command onto the next line, and a document with *no* commands must not have every line dimmed as output. Spans are split at `commandStart`, so one leaf reading `$ npm install` yields a dim `$ ` and a bold `npm install`.
 5. **Layout.** `computeLayout` in [src/export/layout.ts](../src/export/layout.ts) measures every span with a shared 2D canvas context and returns a `Layout`: per-line `top`/`baseline`, per-span `x`/`width`/resolved style, plus `charWidth`, `halfLeading`, `chromeHeight`, the terminal `Rect`, and the overall `width`/`height`.
-6. **Drawing.** `Scene = { layout, frame, theme, background }` ([src/export/scene.ts](../src/export/scene.ts)). Three things draw it: the DOM preview in [src/App.tsx](../src/App.tsx), `renderToCanvas` in [src/export/canvas.ts](../src/export/canvas.ts), and `renderToSvg` in [src/export/svg.ts](../src/export/svg.ts).
+6. **Drawing.** `Scene = { layout, frame, theme, background }` ([src/export/scene.ts](../src/export/scene.ts)). `buildOps` in [src/export/paint.ts](../src/export/paint.ts) turns it into a display list, which both exporters then execute: `renderToCanvas` in [src/export/canvas.ts](../src/export/canvas.ts) and `renderToSvg` in [src/export/svg.ts](../src/export/svg.ts). The live preview in [src/App.tsx](../src/App.tsx) is the third renderer and the one that goes its own way — see below.
 7. **Text out.** [src/core/serialize.ts](../src/core/serialize.ts) takes the same `RenderLine[]` and produces raw ANSI (`toAnsi`), a runnable chalk snippet (`toChalkSource`) or plain text (`toPlainText`).
 
 The editor is the one place that does *not* consume `documentToRenderLines` for its text: [src/editor/decorate.ts](../src/editor/decorate.ts) computes the same roles as Slate decorations, per text node, so they recompute live as you type and never overwrite a stored mark. It shares `classifyDocument`/`hasCommands` with `document.ts` but implements the span split a second time against Slate paths — the two are parallel and have to stay in agreement. `computeLayout` still runs over `documentToRenderLines`, so the block's *size* comes from the flattened path even while its glyphs come from Slate.
@@ -53,13 +53,19 @@ These are the load-bearing ones. Each is cheap to violate by accident and expens
 
 ## The three renderers
 
-They share `computeLayout` and the helpers in `scene.ts` — `resolveShadow`, `SHADOW`, `chromeBorderColor`, `chromeTitleColor`, `CHROME_TITLE_SCALE` — and `trafficLights` from `layout.ts`. What they do *not* share is the drawing itself:
+The two exporters share `computeLayout`, the helpers in `scene.ts` — `resolveShadow`, `SHADOW`, `chromeBorderColor`, `chromeTitleColor`, `CHROME_TITLE_SCALE` — `trafficLights` from `layout.ts`, and, since they stopped each walking the scene themselves, **the drawing itself**.
+
+[src/export/paint.ts](../src/export/paint.ts) walks a `Scene` exactly once into a list of primitives — `fill`, `panel`, `circle`, `text`, `clip` — and the two exporters are reduced to saying "filled rectangle" in their own dialect. Where an underline sits, how thick it is, that backgrounds are a pass of their own before any glyph on the line, that the chrome border is the bar's last pixel rather than the body's first: all of that is decided once, in one place, and both renderers inherit it. Two copies of a number that has to agree is a bug with a delay on it — nothing throws when they drift, the picture on screen just quietly stops being the picture you save.
+
+`buildOps` is pure, which is the other half of the payoff: it is the only part of the export path with a real test ([paint.test.ts](../src/export/paint.test.ts)), because it needs neither a canvas nor a font to check. It is also what makes rendering on a server a matter of one backend rather than a second implementation — see [og-images.md](og-images.md).
+
+What is left genuinely different is only the dialect:
 
 - **The preview** ([src/App.tsx](../src/App.tsx)) positions the frame, the terminal rect, the chrome bar, the traffic lights and the shadow from `layout` numbers, then hands `fontSize`, `lineHeight`, `halfLeading`, `padding` and `width` to `TerminalSurface` and lets the browser flow the glyphs. It is the only renderer that does not place each span at a measured `x`.
 - **`renderToCanvas`** draws at `EXPORT_SCALE` (2×), fills backgrounds per span, then text at `line.baseline`, then underline and strikethrough rects. For JPEG, which has no alpha, `renderBlob` passes the theme background as an `opaqueBackdrop` so a transparent frame does not encode as black.
 - **`renderToSvg`** emits one `<text>` per span at the same measured `x`, with the four woff2 faces inlined as data URLs (`embeddedFontCss`) so the file renders identically anywhere.
 
-A visual change made in one and not the others desynchronizes the preview from the export silently — nothing throws, the picture on screen just stops being the picture you save. Underline offset (`fontSize * 0.14`), strikethrough offset (`fontSize * 0.28`), thickness (`max(1, round(fontSize / 14))`), the one-pixel chrome border and the gradient geometry are all duplicated literally between `canvas.ts` and `svg.ts`; changing one means changing both.
+The preview is the one that can still drift, and the reason is real rather than laziness: it is a live `contenteditable`, so its glyphs are flowed by the browser rather than placed at a measured `x`, and it cannot be driven from a display list without giving that up. Its frame, chrome bar, traffic lights and shadow are still a second description of what `paint.ts` emits. A visual change made to the exporters and not to the preview desynchronizes them silently.
 
 Gradients are the subtle case. `gradientEndpoints` in [src/export/background.ts](../src/export/background.ts) reproduces the CSS gradient-line geometry (0° points up, clockwise, sized so the gradient reaches the corners) so `createLinearGradient`, `<linearGradient>` and the preview's `linear-gradient()` all land on the same ramp.
 
@@ -103,7 +109,7 @@ Two ceilings guard the fact that a link is small and a document need not be. `pu
 | Change how a paste is interpreted | [src/core/ansi.ts](../src/core/ansi.ts) for escape sequences, [src/core/html-paste.ts](../src/core/html-paste.ts) for rich text, [src/editor/withTerminal.ts](../src/editor/withTerminal.ts) for which flavor wins |
 | Change the prompt heuristic | [src/core/prompt.ts](../src/core/prompt.ts) — and check [src/editor/decorate.ts](../src/editor/decorate.ts), which splits spans against Slate paths separately |
 | Change what a role looks like | `roleMarks` / `effectiveMarks` in [src/core/style.ts](../src/core/style.ts) — as marks, never as colors |
-| Change the frame or window | [src/export/layout.ts](../src/export/layout.ts), then all three renderers ([src/App.tsx](../src/App.tsx), [src/export/canvas.ts](../src/export/canvas.ts), [src/export/svg.ts](../src/export/svg.ts)) |
+| Change the frame or window | [src/export/layout.ts](../src/export/layout.ts) for the geometry, [src/export/paint.ts](../src/export/paint.ts) for what gets drawn — both exporters follow — and then [src/App.tsx](../src/App.tsx), which draws its own preview chrome |
 | Add a sidebar control | [src/ui/Sidebar.tsx](../src/ui/Sidebar.tsx) plus `FrameSettings` in [src/export/layout.ts](../src/export/layout.ts) — and `sanitizeFrame` in [src/workspace.ts](../src/workspace.ts), or share links drop it |
 | Add a formatting control | [src/ui/Toolbar.tsx](../src/ui/Toolbar.tsx) and `MODIFIER_KEYS` in [src/core/types.ts](../src/core/types.ts). The bar for inclusion is that the control is exactly one SGR code |
 | Change the copy-out formats | [src/core/serialize.ts](../src/core/serialize.ts); the menu is `COPY_MODES` in [src/App.tsx](../src/App.tsx) |
