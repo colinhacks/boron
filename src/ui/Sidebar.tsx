@@ -145,20 +145,21 @@ export function Sidebar({
           />
         </div>
         {frame.showChrome ? (
-          <Field label="Title">
-            <input
-              type="text"
-              name="window-title"
-              className="text-input"
-              // Matches the clamp in `sanitizeFrame`. Without it the clamp fires
-              // on a real title, and the block a link opens is narrower than the
-              // one that was shared — the chrome widens to fit the title.
-              maxLength={MAX_TITLE_LENGTH}
-              value={frame.title}
-              placeholder="zsh — boron"
-              onChange={(event) => onFrameChange({ title: event.target.value })}
-            />
-          </Field>
+          // No label — the panel heading and the toggle beside it already say
+          // what this is, and the box only exists while the title bar is on.
+          <input
+            type="text"
+            name="window-title"
+            className="text-input"
+            aria-label="Title"
+            // Matches the clamp in `sanitizeFrame`. Without it the clamp fires
+            // on a real title, and the block a link opens is narrower than the
+            // one that was shared — the chrome widens to fit the title.
+            maxLength={MAX_TITLE_LENGTH}
+            value={frame.title}
+            placeholder="zsh — boron"
+            onChange={(event) => onFrameChange({ title: event.target.value })}
+          />
         ) : null}
       </section>
 
