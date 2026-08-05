@@ -55,10 +55,11 @@ export function FloatingToolbar({ theme }: { theme: Theme }) {
 
     setVisible(true);
     const { offsetWidth: width, offsetHeight: height } = element;
-    const left = Math.min(
-      Math.max(GAP, rect.left + rect.width / 2 - width / 2),
-      window.innerWidth - width - GAP,
-    );
+    // Bottom-left corner pinned to the start of the highlight, so the toolbar
+    // opens up and to the right and covers the lines above rather than the
+    // selection itself. Pulled back in when that overhangs the right edge, and
+    // dropped underneath when there is no room above.
+    const left = Math.min(Math.max(GAP, rect.left), window.innerWidth - width - GAP);
     const above = rect.top - height - GAP;
     const top = above > GAP ? above : rect.bottom + GAP;
     element.style.left = `${left + window.scrollX}px`;

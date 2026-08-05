@@ -43,6 +43,27 @@ function sgrFor(index: number, background: boolean): number {
   return index < 8 ? base + index : base + 60 + (index - 8);
 }
 
+/**
+ * The hues in spectral order, with the two greys bracketing them. ANSI counts
+ * its colors off red, green, yellow, blue, magenta, cyan — an order that falls
+ * out of the bit pattern of the SGR codes and reads as noise in a row of color.
+ */
+const SWATCH_HUES = ["black", "red", "yellow", "green", "cyan", "blue", "magenta", "white"] as const;
+
+/**
+ * The order the swatches are laid out in, which is not the order they are
+ * numbered in: spectral, and each hue immediately beside its own bright
+ * variant, so the strip runs as one rainbow instead of as the whole dim run
+ * followed by the whole bright run repeating it.
+ *
+ * `NAMED_COLORS` stays in ANSI index order — `ansi.ts` maps SGR codes straight
+ * through it — so each swatch carries its own index along for the tooltip
+ * rather than being renumbered by its position here.
+ */
+const SWATCH_ORDER: readonly { name: NamedColor; index: number }[] = SWATCH_HUES.flatMap((hue) =>
+  [hue, `${hue}Bright` as const].map((name) => ({ name, index: NAMED_COLORS.indexOf(name) })),
+);
+
 interface SwatchRowProps {
   label: string;
   markKey: "fg" | "bg";
@@ -57,7 +78,7 @@ function SwatchRow({ label, markKey, active, theme, onPick }: SwatchRowProps) {
     <div className="swatch-row">
       <span className="swatch-row__label">{label}</span>
       <div className="swatch-row__grid">
-        {NAMED_COLORS.map((name, index) => {
+        {SWATCH_ORDER.map(({ name, index }) => {
           const chalkName = background ? `bg${name.charAt(0).toUpperCase()}${name.slice(1)}` : name;
           return (
             <button
