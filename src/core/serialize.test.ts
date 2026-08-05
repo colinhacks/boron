@@ -4,7 +4,7 @@ import { documentToRenderLines, parsedLinesToDocument, type LineElement } from "
 import { toAnsi, toChalkSource, toPlainText } from "./serialize.ts";
 import { resolveStyle, roleMarks } from "./style.ts";
 import { THEMES, themeById, type Theme } from "./themes.ts";
-import { MODIFIER_KEYS, NAMED_COLORS, type Color, type RenderLine } from "./types.ts";
+import { MODIFIER_KEYS, NAMED_COLORS, isColor, type Color, type RenderLine } from "./types.ts";
 
 const E = "\u001b";
 const theme = THEMES[0]!;
@@ -211,10 +211,48 @@ describe("the representability invariant", () => {
     }
   });
 
-  it("gives every modifier an escape code too", () => {
+  it("gives every modifier an escape code that round-trips", () => {
     for (const key of MODIFIER_KEYS) {
       const doc: LineElement[] = [{ type: "line", children: [{ text: "x", [key]: true }] }];
-      expect(toAnsi(render(doc)), `no escape code for ${key}`).not.toBe("x");
+      const ansi = toAnsi(render(doc));
+      expect(ansi, `no escape code for ${key}`).not.toBe("x");
+      // Not just "something was emitted" — the right code, and only it.
+      expect(parseAnsi(ansi)[0]!.spans[0]!.marks, `wrong escape code for ${key}`).toEqual({
+        [key]: true,
+      });
+    }
+  });
+
+  /**
+   * The half the type system cannot reach. `isColor` decides what may reach a
+   * leaf, but the parser is what *puts* colors there — and it used to mint
+   * `ansi256:999` from a `38;5;999`, which paints as invalid CSS and serializes
+   * to nothing. Every producer has to land inside what `isColor` accepts.
+   */
+  it("never parses a color the model would refuse", () => {
+    for (let n = -5; n <= 300; n++) {
+      for (const layer of [38, 48] as const) {
+        const marks = parseAnsi(`${E}[${layer};5;${n}mx`)[0]!.spans[0]!.marks;
+        const color = layer === 38 ? marks.fg : marks.bg;
+        if (color === undefined) continue;
+        expect(isColor(color), `${layer};5;${n} produced ${color}`).toBe(true);
+      }
+    }
+    // Truecolor, including the out-of-range channels a sloppy emitter sends.
+    for (const params of ["38;2;0;0;0", "38;2;255;255;255", "38;2;300;-1;12", "38;2;1;2"]) {
+      const { fg } = parseAnsi(`${E}[${params}mx`)[0]!.spans[0]!.marks;
+      if (fg !== undefined) expect(isColor(fg), `${params} produced ${fg}`).toBe(true);
+    }
+  });
+
+  it("emits codes for everything isColor accepts, and nothing it refuses", () => {
+    const accepted = [...NAMED_COLORS, "ansi256:0", "ansi256:16", "ansi256:255", "#abc", "#1e3a8a"];
+    for (const color of accepted) {
+      expect(isColor(color)).toBe(true);
+      expect(toAnsi(render([{ type: "line", children: [{ text: "x", fg: color as Color }] }]))).not.toBe("x");
+    }
+    for (const color of ["rebeccapurple", "ansi256:256", "ansi256:-1", "#12345", "rgb(1,2,3)", ""]) {
+      expect(isColor(color), `${color} should be refused`).toBe(false);
     }
   });
 });

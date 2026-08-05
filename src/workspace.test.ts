@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { LineElement } from "./core/document.ts";
+import { MAX_LINES, type LineElement } from "./core/document.ts";
 import { DEFAULT_THEME } from "./core/themes.ts";
 import { DEFAULT_BACKGROUND_ID, TRANSPARENT_ID } from "./export/background.ts";
-import { DEFAULT_FRAME, type FrameSettings } from "./export/layout.ts";
+import { DEFAULT_FRAME, MAX_TITLE_LENGTH, type FrameSettings } from "./export/layout.ts";
 import {
   buildShareUrl,
   decodeWorkspace,
@@ -207,6 +207,31 @@ describe("sanitizing", () => {
       },
     ];
     expect(sanitizeDocument(legal)).toEqual(legal);
+  });
+
+  /**
+   * A link is a few hundred bytes and the block neither scrolls nor virtualizes,
+   * so without a ceiling one click builds a document that hangs the tab — and it
+   * is persisted on arrival, so the next load hangs it again.
+   */
+  it("refuses a payload that would unpack into more document than anyone meant", async () => {
+    const justUnder = await encodeWorkspace({
+      ...workspace,
+      document: Array.from({ length: MAX_LINES }, () => ({ type: "line" as const, children: [{ text: "x" }] })),
+    });
+    expect((await decodeWorkspace(justUnder))?.document).toHaveLength(MAX_LINES);
+
+    // The cheap door: line count is a newline count, not an array anyone writes.
+    const bomb = plainPayload({ v: 1, ansi: "hello\n".repeat(MAX_LINES + 1) });
+    expect(await decodeWorkspace(bomb)).toBeNull();
+
+    expect(
+      sanitizeDocument(Array.from({ length: MAX_LINES + 1 }, () => ({ type: "line", children: [{ text: "x" }] }))),
+    ).toBeNull();
+  });
+
+  it("clamps the title to what the sidebar can produce", () => {
+    expect(sanitizeFrame({ title: "z".repeat(500) }).title).toHaveLength(MAX_TITLE_LENGTH);
   });
 
   it("holds that door on the way in from a link", async () => {

@@ -2,14 +2,12 @@ import { parseAnsi } from "./core/ansi.ts";
 import {
   emptyDocument,
   parsedLinesToDocument,
-  type LineElement,
-  type StyledText,
+  sanitizeDocument,
   type TerminalDocument,
 } from "./core/document.ts";
 import { DEFAULT_THEME, themeById } from "./core/themes.ts";
-import { MODIFIER_KEYS, isColor, type Marks } from "./core/types.ts";
 import { DEFAULT_BACKGROUND_ID, TRANSPARENT_ID, backgroundById } from "./export/background.ts";
-import { DEFAULT_FRAME, type FrameSettings } from "./export/layout.ts";
+import { DEFAULT_FRAME, MAX_TITLE_LENGTH, type FrameSettings } from "./export/layout.ts";
 
 /**
  * The document and every setting that decides what the image looks like.
@@ -52,58 +50,13 @@ export function sanitizeFrame(input: unknown): FrameSettings {
     framePadding: clampedNumber(frame.framePadding, DEFAULT_FRAME.framePadding, 0, 400),
     radius: clampedNumber(frame.radius, DEFAULT_FRAME.radius, 0, 200),
     showChrome: typeof frame.showChrome === "boolean" ? frame.showChrome : DEFAULT_FRAME.showChrome,
-    title: typeof frame.title === "string" ? frame.title.slice(0, 200) : DEFAULT_FRAME.title,
+    title: typeof frame.title === "string" ? frame.title.slice(0, MAX_TITLE_LENGTH) : DEFAULT_FRAME.title,
     shadowStrength: clampedNumber(frame.shadowStrength, DEFAULT_FRAME.shadowStrength, 0, 100),
     minColumns: Math.round(clampedNumber(frame.minColumns, DEFAULT_FRAME.minColumns, 1, 400)),
   };
 }
 
-/**
- * The marks on one leaf, keeping only what a terminal could be told.
- *
- * Everything Boron draws has to be expressible as an escape sequence, and the
- * `Color` type says so — but a type says nothing at a door like this one, where
- * the bytes came off a URL somebody else wrote. A `fg` of `rebeccapurple` would
- * satisfy the browser, paint in the editor, and then serialize to nothing at
- * all. Anything that is not a real SGR mark is dropped here instead.
- */
-function sanitizeMarks(leaf: Record<string, unknown>): Marks {
-  const marks: Marks = {};
-  if (isColor(leaf.fg)) marks.fg = leaf.fg;
-  if (isColor(leaf.bg)) marks.bg = leaf.bg;
-  for (const key of MODIFIER_KEYS) {
-    if (leaf[key] === true) marks[key] = true;
-  }
-  return marks;
-}
-
-/**
- * A Slate document, rebuilt leaf by leaf, or `null` when the shape isn't one.
- * Rebuilt rather than waved through: the copy is what guarantees every mark on
- * it is one the exporters can write.
- */
-export function sanitizeDocument(input: unknown): TerminalDocument | null {
-  if (!Array.isArray(input) || input.length === 0) return null;
-
-  const lines: LineElement[] = [];
-  for (const line of input as unknown[]) {
-    if (typeof line !== "object" || line === null) return null;
-    const { type, children } = line as { type?: unknown; children?: unknown };
-    if (type !== "line" || !Array.isArray(children)) return null;
-
-    const leaves: StyledText[] = [];
-    for (const child of children as unknown[]) {
-      if (typeof child !== "object" || child === null) return null;
-      const leaf = child as Record<string, unknown>;
-      if (typeof leaf.text !== "string") return null;
-      leaves.push({ text: leaf.text, ...sanitizeMarks(leaf) });
-    }
-
-    // Slate will not accept an element with no children.
-    lines.push({ type: "line", children: leaves.length > 0 ? leaves : [{ text: "" }] });
-  }
-  return lines;
-}
+export { sanitizeDocument };
 
 /** An unknown theme falls back to the default rather than to nothing. */
 export function sanitizeThemeId(input: unknown): string {
@@ -166,6 +119,14 @@ function base64UrlToBytes(text: string): Uint8Array<ArrayBuffer> | null {
 const DEFLATED = "z";
 const PLAIN = "u";
 
+/**
+ * The most a payload may weigh once unpacked. DEFLATE happily turns a few
+ * hundred bytes of link into hundreds of megabytes of repeated text, and the
+ * receiver has no say in what arrives — so the ceiling is here, on the way in,
+ * rather than left to whatever runs out of memory first.
+ */
+const MAX_DECOMPRESSED_BYTES = 4 * 1024 * 1024;
+
 async function pump(
   bytes: Uint8Array<ArrayBuffer>,
   transform: TransformStream<BufferSource, Uint8Array>,
@@ -188,6 +149,10 @@ async function pump(
     if (done) break;
     chunks.push(value);
     length += value.length;
+    if (length > MAX_DECOMPRESSED_BYTES) {
+      await reader.cancel();
+      throw new Error("Shared workspace is too large");
+    }
   }
 
   const out = new Uint8Array(length);
@@ -273,9 +238,14 @@ export async function decodeWorkspace(payload: string): Promise<Workspace | null
   const share = parsed as SharePayload;
   if (share.v !== 1) return null;
 
-  const document =
-    sanitizeDocument(share.doc) ??
+  // The `ansi` door goes through the same sanitizer as `doc` rather than
+  // straight in: it is the cheaper of the two to abuse, since a line count is a
+  // `\n` count rather than an array somebody has to write out.
+  const source =
+    share.doc ??
     (typeof share.ansi === "string" ? parsedLinesToDocument(parseAnsi(share.ansi)) : emptyDocument());
+  const document = sanitizeDocument(source);
+  if (document === null) return null;
 
   return sanitizeWorkspace(
     { document, themeId: share.theme, backgroundId: share.bg, frame: share.frame },

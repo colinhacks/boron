@@ -19,6 +19,13 @@ export const TERMINAL_PADDING = 24;
 export const FONT_SIZE = 15;
 export const LINE_HEIGHT_RATIO = 1.55;
 
+/**
+ * Longest window title the sidebar accepts and a share link carries. The chrome
+ * widens to fit the title, so the two limits have to be the same number or a
+ * link opens a block of a different width than the one that was shared.
+ */
+export const MAX_TITLE_LENGTH = 200;
+
 export interface FrameSettings {
   /** Space between the terminal and the edge of the image. */
   framePadding: number;

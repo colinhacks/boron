@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { THEMES, type Theme } from "../core/themes.ts";
 import { BACKGROUNDS, TRANSPARENT_ID, backgroundCss, type Background } from "../export/background.ts";
-import type { FrameSettings } from "../export/layout.ts";
+import { MAX_TITLE_LENGTH, type FrameSettings } from "../export/layout.ts";
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -147,6 +147,10 @@ export function Sidebar({
               type="text"
               name="window-title"
               className="text-input"
+              // Matches the clamp in `sanitizeFrame`. Without it the clamp fires
+              // on a real title, and the block a link opens is narrower than the
+              // one that was shared — the chrome widens to fit the title.
+              maxLength={MAX_TITLE_LENGTH}
               value={frame.title}
               placeholder="zsh — boron"
               onChange={(event) => onFrameChange({ title: event.target.value })}

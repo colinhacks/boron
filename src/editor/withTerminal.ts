@@ -1,11 +1,33 @@
 import { Element, Node, Transforms, type Editor } from "slate";
 import { hasAnsi, parseAnsi, type ParsedLine } from "../core/ansi.ts";
-import { parsedLinesToDocument } from "../core/document.ts";
+import { parsedLinesToDocument, sanitizeDocument } from "../core/document.ts";
 import { parseHtmlClipboard } from "../core/html-paste.ts";
 
 function insertParsed(editor: Editor, lines: readonly ParsedLine[]): void {
   const fragment = parsedLinesToDocument(lines);
   Transforms.insertFragment(editor, fragment);
+}
+
+const FRAGMENT_ATTRIBUTE = "data-slate-fragment";
+
+/**
+ * The Slate fragment on the clipboard, decoded, or `null` when there isn't one.
+ *
+ * Looks in the same two places slate-react does: its own MIME type first, then
+ * the attribute it smuggles through the HTML flavour for the browsers that drop
+ * custom types.
+ */
+function slateFragment(data: DataTransfer, html: string): unknown {
+  let encoded = data.getData("application/x-slate-fragment");
+  if (!encoded && html.includes(FRAGMENT_ATTRIBUTE)) {
+    encoded = new RegExp(`${FRAGMENT_ATTRIBUTE}="(.+?)"`).exec(html)?.[1] ?? "";
+  }
+  if (!encoded) return null;
+  try {
+    return JSON.parse(decodeURIComponent(atob(encoded)));
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -24,8 +46,16 @@ export function withTerminal(editor: Editor, ansi16: () => readonly string[]): E
     const text = data.getData("text/plain");
 
     // A copy from Boron itself round-trips through Slate's own fragment format.
-    if (data.getData("application/x-slate-fragment") || html.includes("data-slate-fragment")) {
-      insertData(data);
+    //
+    // Not handed to Slate as-is, though. Its `insertData` base64-decodes the
+    // payload and calls `insertFragment` on whatever JSON comes out, with no
+    // validation — and any page can put that attribute on the clipboard. So the
+    // fragment goes through the same sanitizer a share link does: a copy from
+    // Boron survives it unchanged, and a leaf carrying something no escape code
+    // can express does not.
+    const fragment = sanitizeDocument(slateFragment(data, html));
+    if (fragment) {
+      Transforms.insertFragment(editor, fragment);
       return;
     }
 

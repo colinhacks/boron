@@ -270,6 +270,11 @@ export function App({ shared }: AppProps = {}) {
     (next: Workspace) => {
       editor.children = next.document;
       editor.selection = null;
+      // The undo stack addresses paths in the document being replaced. Kept, it
+      // either throws on the first Cmd+Z or — worse, when the old and new shapes
+      // happen to line up — quietly rewrites the new document with the old one's
+      // edits.
+      editor.history = { undos: [], redos: [] };
       editor.onChange();
       setValue(next.document);
       setThemeId(next.themeId);

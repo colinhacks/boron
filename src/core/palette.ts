@@ -35,9 +35,17 @@ export function namedColorIndex(name: NamedColor): number {
   return NAMED_COLORS.indexOf(name);
 }
 
-/** Build a `Color` from an ANSI 256 index, preferring the named form for 0-15. */
-export function colorFromAnsi256(index: number): Color {
-  if (index >= 0 && index < 16) return NAMED_COLORS[index]!;
+/**
+ * Build a `Color` from an ANSI 256 index, preferring the named form for 0-15.
+ *
+ * `null` outside 0-255, because there is no such color. A program only has to
+ * emit `38;5;256` — an off-by-one on a 256-color palette — for the alternative
+ * to be a leaf holding `ansi256:256`, which paints as invalid CSS in the editor
+ * and serializes back to no escape code at all.
+ */
+export function colorFromAnsi256(index: number): Color | null {
+  if (!Number.isInteger(index) || index < 0 || index > 255) return null;
+  if (index < 16) return NAMED_COLORS[index]!;
   return `ansi256:${index}`;
 }
 

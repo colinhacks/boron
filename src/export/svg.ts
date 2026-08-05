@@ -36,7 +36,7 @@ export async function renderToSvg(scene: Scene): Promise<string> {
     const stops = background.stops
       .map((stop, index) => {
         const offset = background.stops.length === 1 ? 0 : index / (background.stops.length - 1);
-        return `<stop offset="${round(offset)}" stop-color="${stop}"/>`;
+        return `<stop offset="${round(offset)}" stop-color="${escapeXml(stop)}"/>`;
       })
       .join("");
     defs.push(
@@ -64,25 +64,25 @@ export async function renderToSvg(scene: Scene): Promise<string> {
   }
 
   body.push(
-    `<rect x="${round(terminal.x)}" y="${round(terminal.y)}" width="${round(terminal.width)}" height="${round(terminal.height)}" rx="${frame.radius}" fill="${theme.background}"${shadow ? ' filter="url(#boron-shadow)"' : ""}/>`,
+    `<rect x="${round(terminal.x)}" y="${round(terminal.y)}" width="${round(terminal.width)}" height="${round(terminal.height)}" rx="${frame.radius}" fill="${escapeXml(theme.background)}"${shadow ? ' filter="url(#boron-shadow)"' : ""}/>`,
   );
 
   const clipped: string[] = [];
 
   if (frame.showChrome) {
     clipped.push(
-      `<rect x="${round(terminal.x)}" y="${round(terminal.y + layout.chromeHeight - 1)}" width="${round(terminal.width)}" height="1" fill="${chromeBorderColor(theme)}"/>`,
+      `<rect x="${round(terminal.x)}" y="${round(terminal.y + layout.chromeHeight - 1)}" width="${round(terminal.width)}" height="1" fill="${escapeXml(chromeBorderColor(theme))}"/>`,
     );
     for (const light of trafficLights(layout, frame)) {
       clipped.push(
-        `<circle cx="${round(light.cx)}" cy="${round(light.cy)}" r="${round(light.r)}" fill="${light.fill}"/>`,
+        `<circle cx="${round(light.cx)}" cy="${round(light.cy)}" r="${round(light.r)}" fill="${escapeXml(light.fill)}"/>`,
       );
     }
     if (frame.title) {
       clipped.push(
         `<text x="${round(terminal.x + terminal.width / 2)}" y="${round(terminal.y + layout.chromeHeight / 2)}" ` +
           `font-family="${FONT_NAME}, ui-monospace, monospace" font-size="${round(layout.fontSize * CHROME_TITLE_SCALE)}" ` +
-          `fill="${chromeTitleColor(theme)}" text-anchor="middle" dominant-baseline="central">${escapeXml(frame.title)}</text>`,
+          `fill="${escapeXml(chromeTitleColor(theme))}" text-anchor="middle" dominant-baseline="central">${escapeXml(frame.title)}</text>`,
       );
     }
   }
@@ -91,7 +91,7 @@ export async function renderToSvg(scene: Scene): Promise<string> {
     for (const span of line.spans) {
       if (!span.style.background) continue;
       clipped.push(
-        `<rect x="${round(terminal.x + span.x)}" y="${round(terminal.y + line.top)}" width="${round(span.width)}" height="${layout.lineHeight}" fill="${span.style.background}"/>`,
+        `<rect x="${round(terminal.x + span.x)}" y="${round(terminal.y + line.top)}" width="${round(span.width)}" height="${layout.lineHeight}" fill="${escapeXml(span.style.background)}"/>`,
       );
     }
     for (const span of line.spans) {
@@ -105,7 +105,7 @@ export async function renderToSvg(scene: Scene): Promise<string> {
         `font-size="${round(layout.fontSize)}"`,
         span.style.bold ? 'font-weight="700"' : "",
         span.style.italic ? 'font-style="italic"' : "",
-        `fill="${span.style.color}"`,
+        `fill="${escapeXml(span.style.color)}"`,
         'xml:space="preserve"',
       ].filter(Boolean);
       clipped.push(`<text ${attributes.join(" ")}>${escapeXml(span.text)}</text>`);
@@ -113,12 +113,12 @@ export async function renderToSvg(scene: Scene): Promise<string> {
       const thickness = Math.max(1, Math.round(layout.fontSize / 14));
       if (span.style.underline) {
         clipped.push(
-          `<rect x="${round(x)}" y="${round(y + layout.fontSize * 0.14)}" width="${round(span.width)}" height="${thickness}" fill="${span.style.color}"/>`,
+          `<rect x="${round(x)}" y="${round(y + layout.fontSize * 0.14)}" width="${round(span.width)}" height="${thickness}" fill="${escapeXml(span.style.color)}"/>`,
         );
       }
       if (span.style.strikethrough) {
         clipped.push(
-          `<rect x="${round(x)}" y="${round(y - layout.fontSize * 0.28)}" width="${round(span.width)}" height="${thickness}" fill="${span.style.color}"/>`,
+          `<rect x="${round(x)}" y="${round(y - layout.fontSize * 0.28)}" width="${round(span.width)}" height="${thickness}" fill="${escapeXml(span.style.color)}"/>`,
         );
       }
     }

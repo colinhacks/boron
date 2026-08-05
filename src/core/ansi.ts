@@ -161,8 +161,8 @@ function applySgr(state: SgrState, raw: string): void {
       const mode = groups[i + 1]?.[0];
       if (mode === 5) {
         const index = groups[i + 2]?.[0];
-        if (index !== undefined && !Number.isNaN(index)) {
-          const color = colorFromAnsi256(index);
+        const color = index === undefined || Number.isNaN(index) ? null : colorFromAnsi256(index);
+        if (color !== null) {
           if (code === 38) state.fg = color;
           else state.bg = color;
         }

@@ -1,6 +1,6 @@
 import type { ParsedLine } from "./ansi.ts";
 import { classifyDocument, hasCommands } from "./prompt.ts";
-import type { Marks, RenderLine, RenderSpan, SpanRole } from "./types.ts";
+import { MODIFIER_KEYS, isColor, type Marks, type RenderLine, type RenderSpan, type SpanRole } from "./types.ts";
 
 export type StyledText = Marks & { text: string };
 
@@ -60,6 +60,62 @@ export function documentToRenderLines(doc: readonly LineElement[]): RenderLine[]
     if (spans.length === 0) spans.push({ text: "", marks: {}, role: roleAt(0) });
     return { spans };
   });
+}
+
+/**
+ * The marks on one leaf, keeping only what a terminal could be told.
+ *
+ * Everything Boron draws has to be expressible as an escape sequence, and the
+ * `Color` type says so — but a type says nothing where the bytes came off a URL
+ * or a clipboard somebody else wrote. A `fg` of `rebeccapurple` would satisfy
+ * the browser, paint in the editor, and then serialize to nothing at all.
+ * Anything that is not a real SGR mark is dropped here instead.
+ */
+function sanitizeMarks(leaf: Record<string, unknown>): Marks {
+  const marks: Marks = {};
+  if (isColor(leaf.fg)) marks.fg = leaf.fg;
+  if (isColor(leaf.bg)) marks.bg = leaf.bg;
+  for (const key of MODIFIER_KEYS) {
+    if (leaf[key] === true) marks[key] = true;
+  }
+  return marks;
+}
+
+/**
+ * How many lines an untrusted document may carry. A share link is written by
+ * whoever sends it, and the block does not scroll or virtualize: every line is
+ * a real DOM node in the editor and a real row in the export. Without a ceiling
+ * a few hundred bytes of compressed payload expand into a document that hangs
+ * the tab — and it is persisted on arrival, so the next load hangs it again.
+ */
+export const MAX_LINES = 5000;
+
+/**
+ * A Slate document, rebuilt leaf by leaf, or `null` when the shape isn't one.
+ * Rebuilt rather than waved through: the copy is what guarantees every mark on
+ * it is one the exporters can write.
+ */
+export function sanitizeDocument(input: unknown): TerminalDocument | null {
+  if (!Array.isArray(input) || input.length === 0 || input.length > MAX_LINES) return null;
+
+  const lines: LineElement[] = [];
+  for (const line of input as unknown[]) {
+    if (typeof line !== "object" || line === null) return null;
+    const { type, children } = line as { type?: unknown; children?: unknown };
+    if (type !== "line" || !Array.isArray(children)) return null;
+
+    const leaves: StyledText[] = [];
+    for (const child of children as unknown[]) {
+      if (typeof child !== "object" || child === null) return null;
+      const leaf = child as Record<string, unknown>;
+      if (typeof leaf.text !== "string") return null;
+      leaves.push({ text: leaf.text, ...sanitizeMarks(leaf) });
+    }
+
+    // Slate will not accept an element with no children.
+    lines.push({ type: "line", children: leaves.length > 0 ? leaves : [{ text: "" }] });
+  }
+  return lines;
 }
 
 /** Build a Slate document from parsed terminal lines. */
