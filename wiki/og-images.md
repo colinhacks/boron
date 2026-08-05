@@ -2,21 +2,21 @@
 
 A design sketch, not a built feature. The goal: paste a Boron link into Slack, Twitter, Discord or iMessage and have the unfurl show *that terminal block*, rendered server-side, rather than the one static card everybody gets today.
 
-Two things have to be true for it to work, and neither is true right now. Both are written up here with what was actually measured.
+Two things have to be true for it to work. The first now is; the second is not, and turned out to be a defect in what share links already promise. Both are written up here with what was actually measured.
 
-## Blocker 1 — the payload is in the fragment, and the server never sees it
+## Blocker 1 — solved: the payload is in the query string
 
-Share links are `boron.sh/#s=<payload>`. A URL fragment is stripped by the browser before the request goes out: it never reaches Vercel, never appears in a log, and is never sent to a crawler. That is exactly why the fragment was chosen ([architecture.md](architecture.md) — the payload stays off every server that handles the link), and it is also precisely what makes server-side rendering impossible as things stand.
+Share links used to be `boron.sh/#s=<payload>`. A URL fragment is stripped by the browser before the request goes out: it never reaches Vercel, never appears in a log, and is never sent to a crawler. Good for privacy, and fatal for a preview card — Slack, Twitter and the rest fetch the URL and read `<meta>` out of the HTML, without running JavaScript, so a card can only be built from something the server is actually told.
 
-Crawlers make it worse: Slack, Twitter and the rest fetch the URL and read `<meta>` tags out of the HTML. They do not run JavaScript. So even a client that could render the card has no way to put it in front of them.
+So `buildShareUrl` now emits `boron.sh/?s=<payload>`, falling back to the fragment past `MAX_QUERY_URL_LENGTH` (a fragment has no practical length cap; a query string rides in the request line, which proxies cap at roughly 8-16KB). Those long links simply do not get a card. `shareParamFrom` reads both forever.
 
-**The fix is a path form:** `boron.sh/s/<payload>`. A path is sent to the server, caches cleanly at the edge, and reads better than a query string. `shareParamFrom` in [src/workspace.ts](../src/workspace.ts) already accepts `?s=` as well as `#s=`, so adding a third source is small. Keep `#s=` decoding forever — links already in the wild must not break — but emit the path form from `buildShareUrl`.
+An earlier draft of this proposed a `/s/<payload>` path form instead. The query string does the same job with no routing to add, so the path form is not worth it.
 
-That gives two routes:
+What remains is one route and one piece of middleware:
 
 | Route | Returns |
 | --- | --- |
-| `GET /s/<payload>` | The app shell, with `og:image` pointed at the image route and an `og:title`/`og:description` derived from the payload |
+| `/` with `?s=` present | The app shell, with `og:image` pointed at the image route and an `og:title`/`og:description` derived from the payload. Middleware, short-circuiting immediately when there is no `s`, so the bare homepage stays static |
 | `GET /og/<payload>.png` | The rendered PNG |
 
 ## Blocker 2 — layout needs a browser, and the bundled font is latin-only
@@ -43,9 +43,28 @@ So for text the app actually ships a font for, layout needs no rasterizer at all
 
 Layout then runs anywhere, is identical on client and server, and — the part that matters most — is finally identical *across browsers*, which is what the share link claimed all along.
 
+## What ports, exactly
+
+There are two renderers today, and they port very differently. Grepping the whole of `src/export/` for `document.`, `window.`, `getContext`, `createElement`, `FontFace`, `Blob`, `fetch(`, `btoa` and `URL.createObjectURL`:
+
+| Module | Browser APIs it touches | Ports? |
+| --- | --- | --- |
+| [scene.ts](../src/export/scene.ts) | none | as-is |
+| [background.ts](../src/export/background.ts) | none | as-is |
+| [svg.ts](../src/export/svg.ts) | none | as-is |
+| [layout.ts](../src/export/layout.ts) | `document.createElement("canvas")`, `getContext` — two lines, both in `context()` | no, and this is the blocker |
+| [canvas.ts](../src/export/canvas.ts) | the whole thing: `createElement`, `getContext`, `roundRect`, `createLinearGradient`, `shadowBlur`, `fillText`, `toBlob` | no |
+| [fonts.ts](../src/export/fonts.ts) | `FontFace`, `document.fonts.add`, `fetch`, `btoa` | partly — `embeddedFontCss` needs the bytes from disk instead of `fetch`; `ensureFontsLoaded` is display-only |
+
+So the answer is not the one you would guess. **The SVG renderer is already pure** — `svg.ts` builds a string and touches nothing browser-specific, and `scene.ts` and `background.ts` (including the CSS gradient geometry) are pure too. The PNG renderer does not port at all, and does not need to: rasterizing our own SVG reuses the renderer rather than replacing it.
+
+**What actually blocks both is `computeLayout`** — two lines in `layout.ts` that make a canvas to call `measureText` on. `renderToSvg` positions every run at a measured `x` rather than letting text flow (that is what keeps SVG and PNG pixel-aligned), so it inherits the dependency wholesale. Make measurement pure and the SVG path runs on a server unchanged.
+
+One honest caveat: a server-rasterized PNG will match the geometry of a browser Save-PNG exactly, since both come from the same `Layout` numbers, but not the antialiasing — resvg and Chrome hint and blend text differently. Fine for an unfurl; not the same claim as the client-to-client pixel-identity share links make.
+
 ## Rendering, once layout is pure
 
-`renderToSvg` in [src/export/svg.ts](../src/export/svg.ts) is already string building rather than DOM work, so with a pure layout the whole pipeline runs on a server: decode the payload → sanitize → `documentToRenderLines` → `computeLayout` → `renderToSvg`.
+With a pure layout the whole pipeline runs on a server: decode the payload → sanitize → `documentToRenderLines` → `computeLayout` → `renderToSvg`.
 
 OG cards will not accept SVG, so it has to be rasterized. `@resvg/resvg-wasm` is the fit: WASM, takes an SVG string and font buffers, returns PNG bytes, and keeps our own renderer as the source of truth.
 
@@ -74,9 +93,9 @@ Because entries are immutable and content-addressed there is no invalidation pro
 
 ## Rough shape of the work
 
-1. Self-host upstream JetBrains Mono, replace the four latin subsets. Independently valuable — it fixes cross-browser fidelity and the SVG export today, with no server involved.
-2. Make `computeLayout` pure (`wcwidth` widths, constant metrics). The one risky step: measured widths shift slightly, so every existing link and saved workspace re-lays-out. They still decode; they just get correct widths.
-3. Add the `/s/<payload>` path form, keeping `#s=` reading.
-4. Add the two routes and the resvg rasterizer, with the cache headers above.
+1. ~~Move the payload to the query string.~~ Done.
+2. Self-host upstream JetBrains Mono, replace the four latin subsets. Independently valuable — it fixes cross-browser fidelity and the SVG export today, with no server involved.
+3. Make `computeLayout` pure (`wcwidth` widths, constant metrics). The one risky step: measured widths shift slightly, so every existing link and saved workspace re-lays-out. They still decode; they just get correct widths.
+4. Add the middleware, the image route and the resvg rasterizer, with the cache headers above.
 
-Steps 1 and 2 are the real work and stand on their own merits. Steps 3 and 4 are small once they are done.
+Steps 2 and 3 are the real work and stand on their own merits. Step 4 is small once they are done.

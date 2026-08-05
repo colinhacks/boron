@@ -256,10 +256,9 @@ export async function decodeWorkspace(payload: string): Promise<Workspace | null
 /* -------------------------------------------------------------- the URL -- */
 
 /**
- * The payload rides in the fragment, so it never reaches a server log, a
- * referrer header or an access log on the way to whoever you sent it to. The
- * query string is read as well, because that is the half of a URL that survives
- * being passed through a tool that only handles one.
+ * Both halves are read. The query string is what links are written as now, and
+ * the fragment is what they used to be written as — those are out in the world
+ * and have to keep working.
  */
 export function shareParamFrom(url: string): string | null {
   let parsed: URL;
@@ -272,11 +271,34 @@ export function shareParamFrom(url: string): string | null {
   return fragment ?? parsed.searchParams.get(SHARE_PARAM);
 }
 
+/**
+ * How long a link may get before it goes back in the fragment.
+ *
+ * A fragment is never sent to the server, so it can be enormous; a query string
+ * travels in the request line, which servers and CDNs cap — commonly somewhere
+ * around 8-16KB for the whole line plus headers. Past this a query link would
+ * start coming back as a 414 from someone else's proxy, and a link that works is
+ * worth more than a link that could carry a preview card.
+ */
+const MAX_QUERY_URL_LENGTH = 8000;
+
+/**
+ * A link to this workspace.
+ *
+ * The payload goes in the query string, not the fragment: a fragment never
+ * reaches the server, which is good for privacy and fatal for anything that
+ * wants to render a preview card — a crawler asks the server for the page and
+ * reads its meta tags, and a fragment is the one part of the URL the server is
+ * never told about.
+ */
 export async function buildShareUrl(workspace: Workspace, base: string): Promise<string> {
   const url = new URL(base);
   url.hash = "";
   url.search = "";
-  return `${url.href}#${SHARE_PARAM}=${await encodeWorkspace(workspace)}`;
+  const payload = await encodeWorkspace(workspace);
+
+  const query = `${url.href}?${SHARE_PARAM}=${payload}`;
+  return query.length <= MAX_QUERY_URL_LENGTH ? query : `${url.href}#${SHARE_PARAM}=${payload}`;
 }
 
 /**

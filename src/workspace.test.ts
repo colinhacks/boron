@@ -246,10 +246,31 @@ describe("sanitizing", () => {
 });
 
 describe("the URL", () => {
-  it("puts the payload in the fragment, on a clean address", async () => {
+  it("puts the payload in the query string, on a clean address", async () => {
     const url = await buildShareUrl(workspace, "https://boron.sh/?utm=x#s=stale");
-    expect(url.startsWith("https://boron.sh/#s=")).toBe(true);
-    expect(await decodeWorkspace(url.split("#s=")[1]!)).toEqual(workspace);
+    expect(url.startsWith("https://boron.sh/?s=")).toBe(true);
+    expect(await decodeWorkspace(shareParamFrom(url)!)).toEqual(workspace);
+  });
+
+  /**
+   * A fragment never reaches the server, so it has no practical length limit; a
+   * query string travels in the request line and somebody else's proxy decides
+   * how long that may be. A link that works beats a link that could carry a card.
+   */
+  it("falls back to the fragment when the query string would get too long", async () => {
+    const big: Workspace = {
+      ...workspace,
+      // Random-ish text so it does not simply compress away.
+      document: Array.from({ length: 400 }, (_, line): LineElement => ({
+        type: "line",
+        children: [{ text: `${line} ${Math.PI * line} ${(line * 2654435761) % 1000000}`.repeat(4) }],
+      })),
+    };
+    const url = await buildShareUrl(big, "https://boron.sh/");
+    expect(url.length).toBeGreaterThan(8000);
+    expect(url).toContain("#s=");
+    expect(url).not.toContain("?s=");
+    expect(await decodeWorkspace(shareParamFrom(url)!)).toEqual(big);
   });
 
   it("reads the payload from either half of a URL", () => {
