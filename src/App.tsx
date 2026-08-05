@@ -234,12 +234,17 @@ export function App() {
   // Dragging either edge of the block sets the minimum width. Captured on
   // pointerdown so the gesture survives the layout changing underneath it.
   const resizeRef = useRef<{ startX: number; startCols: number; side: "left" | "right"; floor: number; scale: number } | null>(null);
+  // Which grip is held. Pointer capture keeps the events coming after the
+  // pointer leaves the handle, but :hover does not survive the trip, so the lit
+  // state is tracked rather than inferred.
+  const [dragging, setDragging] = useState<"left" | "right" | null>(null);
 
   const startResize = useCallback(
     (event: React.PointerEvent<HTMLDivElement>, side: "left" | "right") => {
       if (!layout) return;
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
+      setDragging(side);
       resizeRef.current = {
         startX: event.clientX,
         startCols: (layout.terminal.width - TERMINAL_PADDING * 2) / layout.charWidth,
@@ -270,6 +275,7 @@ export function App() {
   const endResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!resizeRef.current) return;
     resizeRef.current = null;
+    setDragging(null);
     event.currentTarget.releasePointerCapture(event.pointerId);
   }, []);
 
@@ -401,7 +407,7 @@ export function App() {
                   {(["left", "right"] as const).map((side) => (
                     <div
                       key={side}
-                      className="resize-handle"
+                      className={`resize-handle${dragging === side ? " resize-handle--dragging" : ""}`}
                       role="separator"
                       aria-orientation="vertical"
                       aria-label="Drag to set the minimum width"
@@ -412,7 +418,10 @@ export function App() {
                             : layout.terminal.x + layout.terminal.width - 5,
                         top: layout.terminal.y,
                         height: layout.terminal.height,
-                      }}
+                        // The grip counter-scales off this so it stays the same
+                        // size on screen however far the preview is zoomed out.
+                        "--preview-scale": previewScale,
+                      } as React.CSSProperties}
                       onPointerDown={(event) => startResize(event, side)}
                       onPointerMove={moveResize}
                       onPointerUp={endResize}

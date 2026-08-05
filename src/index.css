@@ -299,8 +299,13 @@ input {
  * Grab either edge of the block to set its minimum width. Sits astride the
  * terminal's border rather than inside it, so it never competes with the editor
  * for a click, and it is invisible until the pointer finds it.
+ *
+ * The handle rides inside the scaled .frame, so a fixed pixel size shrinks with
+ * the preview. Counter-scaling keeps the grip the same size on screen at any
+ * zoom; the cap stops it ballooning past the hit strip on a very wide block.
  */
 .resize-handle {
+  --grip-scale: clamp(1, calc(1 / var(--preview-scale, 1)), 2);
   position: absolute;
   z-index: 3;
   width: 10px;
@@ -308,17 +313,38 @@ input {
   touch-action: none;
 }
 
+/*
+ * A short capsule at the middle of the edge, not a rail down the whole side: a
+ * full-height bar runs straight past the block's rounded corners and hangs in
+ * the backdrop on its own, which reads as a seam rather than as something to
+ * grab. Capped against the handle's own height so it stays a grip rather than a
+ * rail on a block only a few lines tall.
+ */
 .resize-handle::after {
   content: "";
   position: absolute;
-  inset: 0 4px;
-  border-radius: 2px;
-  background: transparent;
-  transition: background 110ms ease;
+  top: 50%;
+  left: 50%;
+  width: calc(4px * var(--grip-scale));
+  height: min(calc(46px * var(--grip-scale)), 60%);
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 1px calc(4px * var(--grip-scale)) rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity 110ms ease, height 110ms ease, background 110ms ease;
 }
 
-.resize-handle:hover::after {
-  background: rgba(255, 255, 255, 0.4);
+.resize-handle:hover::after,
+.resize-handle--dragging::after {
+  opacity: 1;
+}
+
+/* Held down: grows and goes solid, and stays lit even once the pointer has
+   travelled off the handle it captured. */
+.resize-handle--dragging::after {
+  height: min(calc(62px * var(--grip-scale)), 76%);
+  background: #fff;
 }
 
 .terminal {
