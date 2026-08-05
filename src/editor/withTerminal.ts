@@ -2,6 +2,7 @@ import { Element, Node, Transforms, type Editor } from "slate";
 import { hasAnsi, parseAnsi, type ParsedLine } from "../core/ansi.ts";
 import { parsedLinesToDocument, sanitizeDocument } from "../core/document.ts";
 import { parseHtmlClipboard } from "../core/html-paste.ts";
+import { parseRtfClipboard } from "../core/rtf-paste.ts";
 
 function insertParsed(editor: Editor, lines: readonly ParsedLine[]): void {
   const fragment = parsedLinesToDocument(lines);
@@ -37,6 +38,11 @@ function slateFragment(data: DataTransfer, html: string): unknown {
  * codes name their colors (`green`) while HTML has already resolved them to one
  * terminal's hex. Only when neither carries styling do we fall through to plain
  * text and let the `$`-prompt heuristic do the work.
+ *
+ * `text/html` is tried before `text/rtf` because it is the flavour every
+ * terminal that writes rich text at all will offer, and on macOS the two say the
+ * same thing — the HTML is made out of the RTF. RTF is what is left when nothing
+ * made that conversion for us, which off macOS is nobody.
  */
 export function withTerminal(editor: Editor, ansi16: () => readonly string[]): Editor {
   const { insertData, normalizeNode } = editor;
@@ -66,6 +72,15 @@ export function withTerminal(editor: Editor, ansi16: () => readonly string[]): E
 
     if (html) {
       const parsed = parseHtmlClipboard(html, ansi16());
+      if (parsed) {
+        insertParsed(editor, parsed);
+        return;
+      }
+    }
+
+    const rtf = data.getData("text/rtf");
+    if (rtf) {
+      const parsed = parseRtfClipboard(rtf, ansi16());
       if (parsed) {
         insertParsed(editor, parsed);
         return;

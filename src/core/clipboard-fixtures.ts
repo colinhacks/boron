@@ -6,11 +6,15 @@
  * this markup would only test our imagination, so when a new terminal needs
  * supporting, capture it rather than write it.
  *
- * Capture it the way the app receives it, too: read `text/html` off a real paste
- * event, not off the pasteboard. On macOS those differ. A terminal that writes
- * only `public.rtf` still reaches us as HTML, because Chrome converts RTF
- * through NSAttributedString on the way in — so a terminal that looks
- * unsupported when you inspect the pasteboard may be perfectly supportable.
+ * Capture HTML the way the app receives it — off a real paste event, not off the
+ * pasteboard. On macOS those differ. A terminal that writes only `public.rtf`
+ * still reaches us as HTML, because Chrome converts RTF through
+ * NSAttributedString on the way in, so a terminal that looks unsupported when
+ * you inspect the pasteboard may be perfectly supportable. RTF has no such
+ * subtlety and can be read straight off the pasteboard.
+ *
+ * Both flavours are worth keeping for the same copy. They are what the same
+ * paste looks like on macOS and off it, and the two parsers have to agree.
  */
 
 /**
@@ -102,3 +106,48 @@ span.s8 {font-variant-ligatures: no-common-ligatures; color: #1cd705}
 
 /** The same selection's `text/plain` flavour. No escape codes survive it. */
 export const TERMINAL_APP_2_15_PLAIN = "zshy git:(main) frizz-dev\n\n  FRIZZ v0.2.0  ready in 21s\n\n  ➜  Local:    http://127.0.0.1:4918/\n  ➜  Project:  zshy — ~/Documents/projects/zshy\n  ➜  Source:   ~/Documents/projects/fray\n  ➜  Logs:     ~/.frizz/projects/2c4cddd3-198f-4108-896f-a6dfa5440d8f/logs/frizz-2026-08-05T09-25-29-3704.log\n\n  press ctrl-c to stop · run with --debug for the full event feed\n\n\n";
+
+/**
+ * The same Terminal.app 2.15 copy as `TERMINAL_APP_2_15`, in the flavour the
+ * pasteboard actually held: `public.rtf`. Read straight off the pasteboard,
+ * since no conversion is involved in getting it.
+ *
+ * Kept because this is what a terminal that writes RTF and no HTML looks like
+ * off macOS, where nothing converts it for us.
+ */
+export const TERMINAL_APP_2_15_RTF = String.raw`{\rtf1\ansi\ansicpg1252\cocoartf2870
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 Menlo-Bold;\f1\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;\red62\green191\blue205;\red30\green31\blue41;\red35\green189\blue14;
+\red100\green42\blue255;\red214\green60\blue41;\red229\green48\blue228;\red32\green95\blue30;\red63\green198\blue43;
+\red28\green215\blue5;}
+{\*\expandedcolortbl;;\cssrgb\c28165\c79016\c84036;\cspthree\c15686\c16471\c20784;\cssrgb\c11520\c77105\c5411;
+\cssrgb\c47302\c30064\c100000;\cssrgb\c87890\c32249\c20977;\cssrgb\c92775\c33094\c91596;\csgenericrgb\c12402\c37061\c11734;\cssrgb\c28397\c80130\c21862;
+\cssrgb\c0\c85317\c162;}
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f0\b\fs26 \cf2 \cb3 \CocoaLigature0 zshy
+\f1\b0 \cf4  
+\f0\b \cf5 git:(\cf6 main\cf5 )
+\f1\b0 \cf4  frizz-dev\
+\
+  
+\f0\b \cf7 FRIZZ
+\f1\b0 \cf4  \cf8 v0.2.0\cf4   \cf8 ready in 21s\cf4 \
+\
+  \cf9 \uc0\u10140 \cf4   
+\f0\b \cf10 Local:   
+\f1\b0 \cf4  \cf2 http://127.0.0.1:4918/\cf4 \
+  \cf9 \uc0\u10140 \cf4   
+\f0\b \cf10 Project: 
+\f1\b0 \cf4  \cf8 zshy \'97 ~/Documents/projects/zshy\cf4 \
+  \cf9 \uc0\u10140 \cf4   
+\f0\b \cf10 Source:  
+\f1\b0 \cf4  \cf8 ~/Documents/projects/fray\cf4 \
+  \cf9 \uc0\u10140 \cf4   
+\f0\b \cf10 Logs:    
+\f1\b0 \cf4  \cf8 ~/.frizz/projects/2c4cddd3-198f-4108-896f-a6dfa5440d8f/logs/frizz-2026-08-05T09-25-29-3704.log\cf4 \
+\
+  \cf8 press ctrl-c to stop \'b7 run with --debug for the full event feed\cf4 \
+\
+\
+}`;
