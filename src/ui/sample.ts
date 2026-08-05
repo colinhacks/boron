@@ -25,7 +25,7 @@ const badge = wrap("1;30;42");
  * The starting document, written as real ANSI and run through the parser — the
  * same path a paste takes, so the demo content is never a special case.
  *
- * It is the same session as the Open Graph card in `logo-concepts/og-card.html`,
+ * It is the same session as the Open Graph card in `scripts/og-card.html`,
  * and for the same reason: between them these lines exercise bold, dim, six
  * hues, underlines and two kinds of fill, so the first thing anyone sees is a
  * demonstration of what Boron can actually render.

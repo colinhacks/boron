@@ -1,8 +1,8 @@
 // Emits the Boron identity — the rainbow terminal-cell B — into public/, which
 // Vite copies to the site root verbatim.
 //
-//   node logo-concepts/build-assets.mjs      writes public/*.svg
-//   then: logo-concepts/rasterize.sh         writes public/*.png and favicon.ico
+//   node scripts/build-assets.mjs      writes public/*.svg
+//   then: scripts/rasterize.sh         writes public/*.png and favicon.ico
 //
 // The mark is generated rather than drawn so the cell grid, the gaps and the
 // color ramp stay exact, and so any of them can be retuned in one place. The
@@ -17,7 +17,6 @@ const OUT = join(ROOT, "public");
 mkdirSync(OUT, { recursive: true });
 
 const BG = "#0f1117";
-const LIGHT_BG = "#f6f7fb";
 const FG = "#e7eaf2";
 const DIM = "#949cb0";
 
@@ -68,19 +67,6 @@ ${mark()}
 </svg>
 `;
 
-// The same tile for light surfaces.
-files["mark-light.svg"] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-  <rect width="128" height="128" rx="28" fill="${LIGHT_BG}"/>
-${mark()}
-</svg>
-`;
-
-// Bare glyph, no tile — for placing on an arbitrary background.
-files["mark-bare.svg"] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-${mark()}
-</svg>
-`;
-
 // Favicon: the tile trimmed to the glyph's own bounds so it stays legible at 16px.
 files["favicon.svg"] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <rect width="128" height="128" rx="24" fill="${BG}"/>
@@ -88,21 +74,9 @@ ${mark({ cell: 14, gap: 1.6 })}
 </svg>
 `;
 
-// Horizontal lockup for a README header or a site nav.
-files["lockup.svg"] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 128" width="420" height="128">
-  <rect width="420" height="128" fill="${BG}"/>
-${mark({ cx: 64, cy: 64 })}
-  <text x="140" y="81" font-family="ui-monospace, 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace" font-size="46" font-weight="500" fill="${FG}" letter-spacing="-1">boron</text>
-</svg>
-`;
-
-files["lockup-light.svg"] = files["lockup.svg"]
-  .replaceAll(`fill="${BG}"`, `fill="${LIGHT_BG}"`)
-  .replaceAll(`fill="${FG}"`, `fill="#1c1f2b"`);
-
 // The Open Graph card is NOT generated here. It is set in JetBrains Mono, which
-// rsvg-convert cannot resolve (see logo-concepts/render-og.sh), so it is authored
-// as HTML in logo-concepts/og-card.html and rendered by a browser instead.
+// rsvg-convert cannot resolve (see scripts/render-og.sh), so it is authored
+// as HTML in scripts/og-card.html and rendered by a browser instead.
 
 for (const [name, svg] of Object.entries(files)) writeFileSync(join(OUT, name), svg);
 

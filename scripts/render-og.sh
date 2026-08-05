@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Renders logo-concepts/og-card.html into public/og.png at 2400x1260 (2x of the
+# Renders scripts/og-card.html into public/og.png at 2400x1260 (2x of the
 # 1200x630 card), which is what index.html points og:image and twitter:image at.
 #
 # A browser rather than rsvg-convert, because the card is set in JetBrains Mono
@@ -21,7 +21,7 @@ trap 'kill "$SERVER" 2>/dev/null || true' EXIT
 
 # Wait for the server rather than sleeping a fixed amount.
 for _ in $(seq 1 40); do
-  curl -sf -o /dev/null "http://127.0.0.1:$PORT/logo-concepts/og-card.html" && break
+  curl -sf -o /dev/null "http://127.0.0.1:$PORT/scripts/og-card.html" && break
   sleep 0.1
 done
 
@@ -33,6 +33,6 @@ done
   --force-device-scale-factor=2 \
   --virtual-time-budget=4000 \
   --screenshot="$PWD/public/og.png" \
-  "http://127.0.0.1:$PORT/logo-concepts/og-card.html" >/dev/null 2>&1
+  "http://127.0.0.1:$PORT/scripts/og-card.html" >/dev/null 2>&1
 
 echo "  public/og.png  $(file -b --mime-type public/og.png), $(sips -g pixelWidth -g pixelHeight public/og.png | awk '/pixel/{printf "%s ", $2}')"

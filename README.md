@@ -28,3 +28,5 @@
 Everything Boron draws is representable in a real terminal. The palette is chalk's sixteen colors, the modifiers are chalk's modifiers, and the automatic styling is expressed as chalk marks rather than hand-picked hex, so the picture you compose and the escape sequence you copy out are the same thing.
 
 Development notes live in [AGENTS.md](AGENTS.md).
+
+Try it 👉 [https://boron.sh](https://boron.sh)

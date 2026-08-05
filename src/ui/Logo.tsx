@@ -4,7 +4,7 @@
  *
  * The colors are frozen here rather than read from the active theme, because
  * this is the product's mark — it should not restyle itself when someone
- * switches the document to Dracula. `logo-concepts/build-assets.mjs` generates
+ * switches the document to Dracula. `scripts/build-assets.mjs` generates
  * the standalone files in `public/` from the same grid and the same ramp.
  */
 

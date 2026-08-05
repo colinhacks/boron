@@ -17,8 +17,7 @@ png favicon.svg    16   16 favicon-16.png
 
 echo "social:"
 # og.png is not built here — it needs JetBrains Mono, which rsvg-convert cannot
-# resolve. Run logo-concepts/render-og.sh for that one.
-png lockup.svg    840  256 lockup.png
+# resolve. Run scripts/render-og.sh for that one.
 
 echo "ico:"
 # Multi-resolution .ico for legacy Windows/Edge and anything that ignores SVG.
