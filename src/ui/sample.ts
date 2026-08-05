@@ -3,34 +3,49 @@ import { parsedLinesToDocument, type TerminalDocument } from "../core/document.t
 
 const E = "\u001b";
 const reset = `${E}[0m`;
-const green = (text: string) => `${E}[32m${text}${reset}`;
-const cyan = (text: string) => `${E}[36m${text}${reset}`;
-const yellow = (text: string) => `${E}[33m${text}${reset}`;
-const magenta = (text: string) => `${E}[35m${text}${reset}`;
-const boldGreen = (text: string) => `${E}[1;32m${text}${reset}`;
-const dim = (text: string) => `${E}[2m${text}${reset}`;
+const wrap = (codes: string) => (text: string) => `${E}[${codes}m${text}${reset}`;
+
+const red = wrap("31");
+const green = wrap("32");
+const yellow = wrap("33");
+const blue = wrap("34");
+const dim = wrap("2");
+const bold = wrap("1");
+const boldGreen = wrap("1;32");
+const boldCyan = wrap("1;36");
+const boldMagenta = wrap("1;35");
+/** An underlined link, which is what a modern dev server prints. */
+const link = wrap("4;36");
+/** A filled run — SGR 100, so it re-themes along with everything else. */
+const fill = wrap("100");
+/** Black on green: the status-badge shape most CLIs land on. */
+const badge = wrap("1;30;42");
 
 /**
  * The starting document, written as real ANSI and run through the parser — the
  * same path a paste takes, so the demo content is never a special case.
+ *
+ * It is the same session as the Open Graph card in `logo-concepts/og-card.html`,
+ * and for the same reason: between them these lines exercise bold, dim, six
+ * hues, underlines and two kinds of fill, so the first thing anyone sees is a
+ * demonstration of what Boron can actually render.
+ *
+ * Note the `➜` placement — the prompt owns column 0, while the arrows bulleting
+ * the server's own output are indented, which is exactly how `prompt.ts` tells
+ * a command from output.
  */
 const SAMPLE_ANSI = [
-  "$ nub run build",
+  `${boldGreen("➜")}  ${boldCyan("boron")} ${blue("git:(")}${red("main")}${blue(")")} ${yellow("✗")} ${bold("nub run dev")}`,
   "",
-  dim("> boron@0.1.0 build"),
-  dim("> vite build"),
+  `  ${boldMagenta("FRIZZ")} ${dim("v0.1.7")}  ${dim("ready in 1.24s")}`,
   "",
-  `${magenta("vite")} v8.2.0 ${dim("building for production...")}`,
-  `${green("✓")} 143 modules transformed.`,
-  `${cyan("dist/index.html")}                  ${dim("0.46 kB │ gzip:  0.30 kB")}`,
-  `${cyan("dist/assets/index-BqT9xkPz.css")}   ${dim("6.12 kB │ gzip:  1.94 kB")}`,
-  `${cyan("dist/assets/index-Cw2mNq7f.js")}  ${dim("248.71 kB │ gzip: 79.35 kB")}`,
-  `${green("✓")} built in ${yellow("1.24s")}`,
+  `  ${green("➜")}  ${bold("Local:")}    ${link("http://127.0.0.1:4922/")}`,
+  `  ${green("➜")}  ${bold("Network:")}  ${link("http://192.168.1.24:4922/")}`,
+  `  ${green("➜")}  ${bold("Project:")}  ${fill("boron")} ${dim("— ~/Documents/projects/boron")}`,
   "",
-  "$ boron deploy --prod",
-  `${green("✔")} Uploading assets`,
-  `${green("✔")} Invalidating CDN`,
-  `${boldGreen("✔")} Live at ${cyan("https://boron.sh")}`,
+  `  ${green("✓")} 85 passed   ${yellow("⚠")} ${dim("2 warnings")}   ${red("✗")} ${dim("0 failed")}`,
+  "",
+  `  ${badge(" READY ")} ${dim("watching for changes — press")} ${bold("q")} ${dim("to quit")}`,
 ].join("\n");
 
 export function sampleDocument(): TerminalDocument {

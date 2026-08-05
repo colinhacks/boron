@@ -32,7 +32,7 @@ export const DEFAULT_FRAME: FrameSettings = {
   showChrome: true,
   title: "",
   shadowStrength: 100,
-  minColumns: 46,
+  minColumns: 80,
 };
 
 export interface LaidSpan {
