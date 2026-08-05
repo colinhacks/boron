@@ -85,6 +85,15 @@ function loadPersisted(): Partial<Workspace> {
   }
 }
 
+/**
+ * How far the preview may zoom out to fit the stage. A document can run to
+ * `MAX_LINES`, and fitting five thousand rows into a viewport would leave a
+ * sliver nobody can read and nothing can be typed into — past this point the
+ * block is better scrolled than shrunk. The floor is where the type stops being
+ * legible: six pixels of a fifteen-pixel face.
+ */
+const MIN_PREVIEW_SCALE = 6 / FONT_SIZE;
+
 type CopyMode = "image" | "ansi" | "chalk" | "text";
 
 const COPY_MODES: readonly { id: CopyMode; label: string }[] = [
@@ -156,13 +165,20 @@ export function App() {
     [fontsReady, renderLines, theme, frame],
   );
 
-  const stageRef = useRef<HTMLDivElement | null>(null);
+  // Fit both axes, not just the width. A block taller than the stage used to
+  // just overflow it, and a centred flex item overflows at *both* ends — so its
+  // first rows sat above the scroll origin, where no scroll position can reach
+  // them. Paste enough and the top of the terminal disappeared under the header
+  // for good.
+  const fitRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    const element = stageRef.current;
+    const element = fitRef.current;
     if (!element || !layout) return;
+    // The box is the space the block may occupy, so its own client size is the
+    // budget — no subtracting the stage's padding or the caption back out.
     const fit = () => {
-      const available = element.clientWidth - 48;
-      setPreviewScale(Math.min(1, available / layout.width));
+      const scale = Math.min(1, element.clientWidth / layout.width, element.clientHeight / layout.height);
+      setPreviewScale(Math.max(MIN_PREVIEW_SCALE, scale));
     };
     fit();
     const observer = new ResizeObserver(fit);
@@ -372,9 +388,9 @@ export function App() {
           <div className="workspace">
             <FloatingToolbar theme={theme} />
 
-            <div className="stage" ref={stageRef}>
+            <div className="stage">
+              <div className="stage__fit" ref={fitRef}>
               {layout ? (
-                <>
                 <div
                   className="frame-fit"
                   style={{ width: layout.width * previewScale, height: layout.height * previewScale }}
@@ -473,11 +489,13 @@ export function App() {
                   ))}
                 </div>
                 </div>
-                <p className="stage__caption">Edit above or try copy/pasting from your terminal.</p>
-                </>
               ) : (
                 <p className="stage__loading">Loading font…</p>
               )}
+              </div>
+              {layout ? (
+                <p className="stage__caption">Edit above or try copy/pasting from your terminal.</p>
+              ) : null}
             </div>
 
             <Credit />

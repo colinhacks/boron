@@ -282,13 +282,36 @@ input {
 .stage {
   flex: 1;
   min-height: 0;
-  overflow: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 16px;
   padding: 24px;
+}
+
+/*
+ * The block's whole world: it may be exactly this big and no bigger, which is
+ * what App.tsx measures to work out how far to zoom the preview out. Splitting
+ * it off the stage is what keeps that measurement honest — the padding and the
+ * caption are outside this box rather than numbers to subtract back off it.
+ *
+ * `safe center` rather than `center` because the two part company precisely when
+ * it matters. A centred flex item that outgrows its container overflows *both*
+ * ends, and the end above the scroll origin cannot be reached at any scroll
+ * position — so a document past the zoom floor would keep its first rows tucked
+ * under the header for good. `safe` gives up the centring in that case and packs
+ * to the start, where scrolling can still get at it.
+ */
+.stage__fit {
+  flex: 1;
+  align-self: stretch;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  display: flex;
+  align-items: safe center;
+  justify-content: safe center;
 }
 
 .stage__loading {
