@@ -28,6 +28,14 @@ The package manager is **`nub`**, not npm or pnpm.
 
 This is a **Vite + React** app, not Next.js. There is a root `index.html` carrying all the page metadata, the entry is `src/main.tsx`, and static files are served from `public/` verbatim.
 
+## Copy
+
+Emojis are fine here — in the README, on the site, and in commit messages. The general prose guide bans them; this project overrides that.
+
+## Persisted state
+
+The whole workspace — document, theme, backdrop and frame settings — is saved to `localStorage`. A changed default therefore reaches nobody who has already opened the app; their stored copy wins. When you change a default that everyone should get, bump `STORAGE_KEY` in `src/App.tsx`.
+
 ## Clipboard fixtures
 
 `src/core/clipboard-fixtures.ts` holds rich-text clipboard payloads captured **verbatim off a real system pasteboard**. Terminals disagree enough about their `text/html` flavour that invented markup only tests your imagination — Ghostty marks every styled run as a `<div style="display: inline">` while VS Code and Konsole use one block element per row, and iTerm2, Terminal.app, kitty, WezTerm and Alacritty write no HTML at all.

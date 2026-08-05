@@ -32,7 +32,16 @@ import { SplitButton } from "./ui/SplitButton.tsx";
 import { FloatingToolbar } from "./ui/FloatingToolbar.tsx";
 import { sampleDocument } from "./ui/sample.ts";
 
-const STORAGE_KEY = "boron.workspace.v1";
+/**
+ * Bump this when a default changes that everyone should actually get.
+ *
+ * The whole workspace is persisted, so a new default — a new sample document, a
+ * wider minimum — never reaches anyone who has opened the app before: their
+ * stored copy wins forever. Changing the key retires the old state and lets the
+ * new defaults through. It discards what was saved under the previous key, which
+ * is the intent.
+ */
+const STORAGE_KEY = "boron.workspace.v2";
 
 interface PersistedState {
   document: TerminalDocument;
