@@ -248,12 +248,16 @@ input {
  * its border as well, so the one chip whose own effect is low contrast was also
  * the one whose selected ring was washed out — it read as disabled while it was
  * switched on.
+ *
+ * Nothing here may change the metrics. A weight change on the label looks like a
+ * free way to make the state louder and is not — every glyph gets wider, so the
+ * pill resizes and the whole row shuffles under the pointer as you toggle. The
+ * fill is doing the work; it costs no width at all.
  */
 .chip--active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
-  font-weight: 600;
 }
 
 .chip--bold .chip__label {
