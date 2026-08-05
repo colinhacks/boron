@@ -89,7 +89,6 @@ function SwatchRow({ label, markKey, active, theme, onPick }: SwatchRowProps) {
               title={`${COLOR_LABELS[name]} — chalk.${chalkName} · SGR ${sgrFor(index, background)}`}
               aria-label={`${label}: ${COLOR_LABELS[name]}`}
               aria-pressed={active === name}
-              onMouseDown={(event) => event.preventDefault()}
               onClick={() => onPick(name)}
             />
           );
@@ -141,8 +140,7 @@ export function Toolbar({ theme }: { theme: Theme }) {
                 className={`chip${marks[key] === true ? " chip--active" : ""} chip--${key}`}
                 title={`chalk.${key} · SGR ${modifier.sgr}`}
                 aria-pressed={marks[key] === true}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => toggleModifier(editor, key)}
+                  onClick={() => toggleModifier(editor, key)}
               >
                 <span className="chip__label">{modifier.label}</span>
               </button>

@@ -98,6 +98,14 @@ export function FloatingToolbar({ theme }: { theme: Theme }) {
       className={`floating-toolbar${visible ? " floating-toolbar--visible" : ""}`}
       role="group"
       aria-label="Formatting"
+      /*
+       * Keep focus in the editor for any press inside the bar — not just on the
+       * buttons, which guarded themselves, but on the 5px between two swatches,
+       * the label column and the padding. The bar is a portal and nothing in it
+       * is focusable, so a press that misses a button sends focus to <body>; the
+       * editor blurs, and the bar hides itself out from under the click.
+       */
+      onMouseDown={(event) => event.preventDefault()}
       // Parked off-screen at opacity 0 rather than `display: none`, so it stays
       // measurable — but that leaves three dozen buttons in the tab order. `inert`
       // takes them out of it and out of the a11y tree without costing the layout.
