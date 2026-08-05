@@ -204,9 +204,26 @@ input {
  * The offset leaves a gap of panel between swatch and ring, which is what keeps
  * it legible around the near-white end of the palette too.
  */
+/*
+ * One selection language, three rules.
+ *
+ * Something you PICK — a colour, a backdrop, a theme — gets this ring. Something
+ * you TOGGLE — the style pills — recolours its own border instead, because an
+ * outer ring on a pill in a wrapping row collides with its neighbours. A menu
+ * row gets neither; it already has a tick.
+ *
+ * The ring is neutral rather than accent on purpose. It sits around a colour the
+ * user chose, so it cannot be a hue itself — the accent ring vanished against the
+ * blue and magenta swatches, which is exactly where you look for it. The 1px
+ * offset leaves a sliver of panel between element and ring, which is what keeps
+ * it legible at the pale end of the palette.
+ *
+ * The knock-on is deliberate: the accent no longer means "selected" anywhere. It
+ * means "action" — the Save button, the menu tick — and only that.
+ */
 .swatch--active {
   outline: 2px solid var(--text);
-  outline-offset: 2px;
+  outline-offset: 1px;
 }
 
 .swatch--clear {
@@ -255,9 +272,8 @@ input {
  * fill is doing the work; it costs no width at all.
  */
 .chip--active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+  border-color: var(--text);
+  color: var(--text);
 }
 
 .chip--bold .chip__label {
@@ -275,12 +291,6 @@ input {
 .chip--dim .chip__label {
   opacity: 0.55;
 }
-/* Lifted against the filled background, so it still reads as faint without
-   reading as off. */
-.chip--active.chip--dim .chip__label {
-  opacity: 0.72;
-}
-
 /* ---------------------------------------------------------------- stage -- */
 
 .stage {
@@ -557,8 +567,8 @@ input {
 }
 
 .theme-card--active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
 }
 
 .theme-card__dots {
@@ -609,8 +619,8 @@ input {
 }
 
 .background-swatch--active {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
 }
 
 .field {
