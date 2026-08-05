@@ -2,12 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createEditor } from "slate";
 import { withHistory } from "slate-history";
 import { Slate, withReact } from "slate-react";
-import { documentToRenderLines, type LineElement, type TerminalDocument } from "./core/document.ts";
+import { documentToRenderLines, type LineElement } from "./core/document.ts";
 import { toAnsi, toChalkSource, toPlainText } from "./core/serialize.ts";
 import { DEFAULT_THEME, themeById } from "./core/themes.ts";
 import { TerminalSurface } from "./editor/TerminalEditor.tsx";
 import { withTerminal } from "./editor/withTerminal.ts";
-import { TRANSPARENT_ID, backgroundById, backgroundCss } from "./export/background.ts";
+import {
+  DEFAULT_BACKGROUND_ID,
+  TRANSPARENT_ID,
+  backgroundById,
+  backgroundCss,
+} from "./export/background.ts";
 import { FONT_FAMILY, ensureFontsLoaded } from "./export/fonts.ts";
 import {
   IMAGE_FORMATS,
@@ -32,6 +37,14 @@ import { Sidebar } from "./ui/Sidebar.tsx";
 import { SplitButton } from "./ui/SplitButton.tsx";
 import { FloatingToolbar } from "./ui/FloatingToolbar.tsx";
 import { sampleDocument } from "./ui/sample.ts";
+import {
+  buildShareUrl,
+  sanitizeBackgroundId,
+  sanitizeDocument,
+  sanitizeFrame,
+  sanitizeThemeId,
+  type Workspace,
+} from "./workspace.ts";
 
 /**
  * Bump this when a default changes that everyone should actually get.
@@ -44,50 +57,62 @@ import { sampleDocument } from "./ui/sample.ts";
  */
 const STORAGE_KEY = "boron.workspace.v2";
 
-interface PersistedState {
-  document: TerminalDocument;
-  themeId: string;
-  backgroundId: string;
-  frame: FrameSettings;
-}
-
-function loadPersisted(): Partial<PersistedState> {
+/**
+ * What was saved last time, field by field. Anything missing or malformed is
+ * dropped rather than defaulted here, so the caller can tell "never set" from
+ * "set to the default" and fall through to the sample document.
+ */
+function loadPersisted(): Partial<Workspace> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return {};
-    const state = parsed as Partial<PersistedState>;
-    const documentIsValid =
-      Array.isArray(state.document) &&
-      state.document.length > 0 &&
-      state.document.every((line) => line?.type === "line" && Array.isArray(line.children));
+    const state = parsed as Partial<Workspace>;
+    const document = sanitizeDocument(state.document);
     return {
-      ...(documentIsValid ? { document: state.document } : {}),
-      ...(typeof state.themeId === "string" ? { themeId: state.themeId } : {}),
-      ...(typeof state.backgroundId === "string" ? { backgroundId: state.backgroundId } : {}),
-      ...(state.frame && typeof state.frame === "object" ? { frame: { ...DEFAULT_FRAME, ...state.frame } } : {}),
+      ...(document ? { document } : {}),
+      ...(typeof state.themeId === "string" ? { themeId: sanitizeThemeId(state.themeId) } : {}),
+      ...(typeof state.backgroundId === "string"
+        ? { backgroundId: sanitizeBackgroundId(state.backgroundId) }
+        : {}),
+      ...(state.frame && typeof state.frame === "object" ? { frame: sanitizeFrame(state.frame) } : {}),
     };
   } catch {
     return {};
   }
 }
 
-type CopyMode = "image" | "ansi" | "chalk" | "text";
+type CopyMode = "image" | "link" | "ansi" | "chalk" | "text";
 
 const COPY_MODES: readonly { id: CopyMode; label: string }[] = [
   { id: "image", label: "image" },
+  { id: "link", label: "link" },
   { id: "ansi", label: "ANSI" },
   { id: "chalk", label: "chalk" },
   { id: "text", label: "text" },
 ];
 
-export function App() {
-  const persisted = useMemo(loadPersisted, []);
-  const [value, setValue] = useState<LineElement[]>(() => persisted.document ?? sampleDocument());
-  const [themeId, setThemeId] = useState(() => persisted.themeId ?? DEFAULT_THEME.id);
-  const [backgroundId, setBackgroundId] = useState(() => persisted.backgroundId ?? "midnight");
-  const [frame, setFrame] = useState<FrameSettings>(() => persisted.frame ?? DEFAULT_FRAME);
+export interface AppProps {
+  /**
+   * The workspace this page was opened with, when the URL carried one. It wins
+   * outright over what is in `localStorage` — a shared link has to look the same
+   * to whoever opens it, and half of the sender's settings crossed with half of
+   * the reader's is nobody's picture.
+   */
+  shared?: Workspace | null;
+}
+
+export function App({ shared }: AppProps = {}) {
+  const persisted = useMemo(() => (shared ? {} : loadPersisted()), [shared]);
+  const [value, setValue] = useState<LineElement[]>(
+    () => shared?.document ?? persisted.document ?? sampleDocument(),
+  );
+  const [themeId, setThemeId] = useState(() => shared?.themeId ?? persisted.themeId ?? DEFAULT_THEME.id);
+  const [backgroundId, setBackgroundId] = useState(
+    () => shared?.backgroundId ?? persisted.backgroundId ?? DEFAULT_BACKGROUND_ID,
+  );
+  const [frame, setFrame] = useState<FrameSettings>(() => shared?.frame ?? persisted.frame ?? DEFAULT_FRAME);
   const [format, setFormat] = useState<ImageFormat>("png");
   const [copyMode, setCopyMode] = useState<CopyMode>("image");
   const [fontsReady, setFontsReady] = useState(false);
@@ -124,7 +149,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const state: PersistedState = { document: value, themeId, backgroundId, frame };
+    const state: Workspace = { document: value, themeId, backgroundId, frame };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
@@ -214,10 +239,26 @@ export function App() {
     [renderLines, flash],
   );
 
+  /**
+   * A link that reopens this exact picture. Everything the render depends on
+   * rides in the fragment, so what comes up on the other side is the same image
+   * rather than the same document under the reader's own settings.
+   */
+  const handleCopyLink = useCallback(async () => {
+    try {
+      const url = await buildShareUrl({ document: value, themeId, backgroundId, frame }, window.location.href);
+      await copyText(url);
+      flash("Link copied");
+    } catch {
+      flash("Clipboard blocked");
+    }
+  }, [value, themeId, backgroundId, frame, flash]);
+
   const handleCopy = useCallback(async () => {
     if (copyMode === "image") await handleCopyImage();
+    else if (copyMode === "link") await handleCopyLink();
     else await copyAs(copyMode);
-  }, [copyMode, handleCopyImage, copyAs]);
+  }, [copyMode, handleCopyImage, handleCopyLink, copyAs]);
 
   /** Reset means everything — the document and every setting around it. */
   const resetAll = useCallback(() => {
@@ -228,7 +269,7 @@ export function App() {
     setValue(next);
     setFrame(DEFAULT_FRAME);
     setThemeId(DEFAULT_THEME.id);
-    setBackgroundId("midnight");
+    setBackgroundId(DEFAULT_BACKGROUND_ID);
   }, [editor]);
 
   // Dragging either edge of the block sets the minimum width. Captured on

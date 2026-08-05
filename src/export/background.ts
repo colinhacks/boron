@@ -20,6 +20,8 @@ export const BACKGROUNDS: readonly Background[] = [
   { id: "ink", name: "Ink", angle: 0, stops: ["#0b0d12", "#0b0d12"] },
 ];
 
+export const DEFAULT_BACKGROUND_ID = "midnight";
+
 export function backgroundById(id: string): Background | null {
   return BACKGROUNDS.find((background) => background.id === id) ?? null;
 }

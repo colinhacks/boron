@@ -16,8 +16,7 @@ const boldCyan = wrap("1;36");
 const boldMagenta = wrap("1;35");
 /** An underlined link, which is what a modern dev server prints. */
 const link = wrap("4;36");
-/** A filled run — SGR 100, so it re-themes along with everything else. */
-const fill = wrap("100");
+const white = wrap("37");
 /** Black on green: the status-badge shape most CLIs land on. */
 const badge = wrap("1;30;42");
 
@@ -27,7 +26,7 @@ const badge = wrap("1;30;42");
  *
  * It is the same session as the Open Graph card in `scripts/og-card.html`,
  * and for the same reason: between them these lines exercise bold, dim, six
- * hues, underlines and two kinds of fill, so the first thing anyone sees is a
+ * hues, underlines and a filled badge, so the first thing anyone sees is a
  * demonstration of what Boron can actually render.
  *
  * Note the `➜` placement — the prompt owns column 0, while the arrows bulleting
@@ -41,7 +40,7 @@ const SAMPLE_ANSI = [
   "",
   `  ${green("➜")}  ${bold("Local:")}    ${link("http://127.0.0.1:4922/")}`,
   `  ${green("➜")}  ${bold("Network:")}  ${link("http://192.168.1.24:4922/")}`,
-  `  ${green("➜")}  ${bold("Project:")}  ${fill("boron")} ${dim("— ~/Documents/projects/boron")}`,
+  `  ${green("➜")}  ${bold("Project:")}  ${white("boron")} ${dim("— ~/Documents/projects/boron")}`,
   "",
   `  ${green("✓")} 85 passed   ${yellow("⚠")} ${dim("2 warnings")}   ${red("✗")} ${dim("0 failed")}`,
   "",
