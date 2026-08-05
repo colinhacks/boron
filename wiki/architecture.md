@@ -4,7 +4,7 @@ Boron turns terminal output into an editable picture of a terminal. Everything b
 
 ## The shape of the app
 
-A Vite + React single-page app with no router and no framework around it. [index.html](../index.html) at the repo root carries every piece of page metadata (title, description, canonical, Open Graph, icons) and one `<div id="root">`; the viewport is pinned at `width=900` because there is no mobile layout. [src/main.tsx](../src/main.tsx) is the entry: it resolves a share link off the URL, *then* calls `createRoot().render()`. [src/App.tsx](../src/App.tsx) is the only stateful component — there is no store, no context beyond one small leaf-settings context, and no data fetching.
+A Vite + React single-page app with no router and no framework around it. [index.html](../index.html) at the repo root carries every piece of page metadata (title, description, canonical, Open Graph, icons) and one `<div id="root">`; the viewport is pinned at `width=900` because there is no mobile layout. [src/main.tsx](../src/main.tsx) is the entry and does nothing but `createRoot().render()`. [src/App.tsx](../src/App.tsx) is the only stateful component — there is no store, no context beyond one small leaf-settings context, and no data fetching.
 
 Text editing is [Slate](https://docs.slatejs.org) (`slate`, `slate-react`, `slate-history`). The document is a flat list of line elements; there are no nested blocks, no inlines and no voids.
 
@@ -71,7 +71,7 @@ Gradients are the subtle case. `gradientEndpoints` in [src/export/background.ts]
 
 ## State and persistence
 
-One object holds everything: `Workspace` in [src/workspace.ts](../src/workspace.ts).
+One object holds everything: `Workspace` in [src/workspace.ts](../src/workspace.ts). It is an internal shape, persisted to `localStorage` and nowhere else — deliberately not a wire format.
 
 ```ts
 interface Workspace {
@@ -82,23 +82,18 @@ interface Workspace {
 }
 ```
 
-**The set of fields in `Workspace` is exactly the set that decides the rendered pixels.** Nothing outside it feeds the render: type size, line height and inner padding are constants, and the face is bundled with the app. That is what lets two browsers handed the same `Workspace` draw the same image. Adding a new visual setting means adding it here as well as to the sidebar — otherwise share links and saved workspaces silently drop it, and the picture quietly reverts to a default on the other side.
+**The set of fields in `Workspace` is exactly the set that decides the rendered pixels.** (Which is what made it tempting to put in a URL, and [share-links.md](share-links.md) is why that was a mistake in this form.) Nothing outside it feeds the render: type size, line height and inner padding are constants, and the face is bundled with the app. That is what lets two browsers handed the same `Workspace` draw the same image. Adding a new visual setting means adding it here as well as to the sidebar — otherwise share links and saved workspaces silently drop it, and the picture quietly reverts to a default on the other side.
 
 It reaches the app three ways:
 
 - **`localStorage`**, under `STORAGE_KEY` in [src/App.tsx](../src/App.tsx) (currently `boron.workspace.v2`). Written by an effect on every change; read by `loadPersisted`, which drops malformed fields rather than defaulting them so the caller can still tell "never set" from "set to the default" and fall through to `sampleDocument()`. Because the whole workspace is stored, a changed default never reaches anyone who has opened the app before — bump the key when it should.
-- **A share URL.** `encodeWorkspace` writes a `SharePayload` (`{ v: 1, doc, theme, bg, frame }`) as JSON, deflates it with `CompressionStream("deflate-raw")` when available, and base64url-encodes it behind a one-character flag: `z` for deflated, `u` for plain. Every setting is written in full and never diffed against defaults — a link is a promise about an image, and deflate makes the repetition close to free. The payload also accepts `ansi` instead of `doc`: raw terminal output, parsed on arrival exactly as a paste would be, so a link is constructible without knowing the Slate schema.
-
-  `buildShareUrl` writes the payload into the **query string** (`?s=…`). It was the fragment first, which is better for privacy — a fragment is never sent to the server — and that is exactly what rules it out: a crawler asks the server for the page and reads its meta tags, so a preview card can only ever be built from something the server is told. Past `MAX_QUERY_URL_LENGTH` it falls back to the fragment anyway, because a fragment has no practical length limit while a query string rides in the request line that somebody else's proxy gets to cap. `shareParamFrom` reads both, and always will: fragment links are out in the world.
+- **Not a share URL.** Encoding the whole workspace into the address was built and pulled back out before it could set in stone — the payload was `TerminalDocument` and `FrameSettings` verbatim, which makes the Slate schema a published API. See [share-links.md](share-links.md); the work is on the `share-links-wire-format` branch.
 - **Nothing** — first visit, which lands on `sampleDocument()` from [src/ui/sample.ts](../src/ui/sample.ts). That sample is authored as real ANSI and run through `parseAnsi`, so the demo content takes the same path a paste does and is never a special case.
 
-A share link wins outright over `localStorage` (`App` skips `loadPersisted` entirely when `shared` is set): half the sender's settings crossed with half the reader's is nobody's picture. `consumeSharedWorkspace` then `history.replaceState`s the parameter away, so editing what someone sent you and reloading keeps your edits. Because Slate captures `initialValue` on first render and decoding is async, this all has to settle in [src/main.tsx](../src/main.tsx) before `createRoot().render()`.
 
-There is a second way in, and it is easy to forget: a link pasted into a tab **already on Boron** changes only the fragment, and a browser does not reload for that — so `main.tsx` never runs again. `App` listens for `hashchange` and applies the workspace through `applyWorkspace`, which pushes the document onto `editor.children` by hand because Slate will not take a new `initialValue`. `resetAll` goes through the same function. Anything replacing the document wholesale must also clear `editor.history`: the undo stack addresses paths in the document being replaced, so keeping it either throws on the first undo or — when the two shapes happen to line up — silently replays the old document's edits into the new one.
 
-Everything arriving from outside goes through the sanitizers — `sanitizeFrame` (clamped wider than the sliders, because a drag can exceed them, but still clamped), `sanitizeThemeId`, `sanitizeBackgroundId` in [src/workspace.ts](../src/workspace.ts), and `sanitizeDocument` in [src/core/document.ts](../src/core/document.ts). `sanitizeBackgroundId` keeps `TRANSPARENT_ID` and turns anything else unrecognized into the default, because passing an unknown id through would quietly hand back a transparent image. `sanitizeDocument` rebuilds the document leaf by leaf rather than waving a valid-looking one through, and every leaf's marks go through `sanitizeMarks`: that rebuild is what makes the representability invariant hold against bytes somebody else wrote. It lives in `core/` because the clipboard needs it as much as the URL does.
+Everything arriving from outside — a stored workspace, a pasted Slate fragment — goes through the sanitizers: `sanitizeFrame` (clamped wider than the sliders, because a drag can exceed them, but still clamped), `sanitizeThemeId`, `sanitizeBackgroundId` in [src/workspace.ts](../src/workspace.ts), and `sanitizeDocument` (capped at `MAX_LINES`) in [src/core/document.ts](../src/core/document.ts). `sanitizeBackgroundId` keeps `TRANSPARENT_ID` and turns anything else unrecognized into the default, because passing an unknown id through would quietly hand back a transparent image. `sanitizeDocument` rebuilds the document leaf by leaf rather than waving a valid-looking one through, and every leaf's marks go through `sanitizeMarks`: that rebuild is what makes the representability invariant hold against bytes somebody else wrote. It lives in `core/` because the clipboard is a door too — see the paste step above.
 
-Two ceilings guard the fact that a link is small and a document need not be. `pump` refuses past `MAX_DECOMPRESSED_BYTES`, and `sanitizeDocument` refuses past `MAX_LINES` — an 876-character link carrying `{ ansi: "hello\n".repeat(60000) }` is otherwise 240,000 DOM nodes, and because the workspace is persisted on arrival, reloading brings it straight back.
 
 ## Where do I change X?
 

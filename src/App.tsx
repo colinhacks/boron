@@ -38,8 +38,6 @@ import { SplitButton } from "./ui/SplitButton.tsx";
 import { FloatingToolbar } from "./ui/FloatingToolbar.tsx";
 import { sampleDocument } from "./ui/sample.ts";
 import {
-  buildShareUrl,
-  consumeSharedWorkspace,
   sanitizeBackgroundId,
   sanitizeDocument,
   sanitizeFrame,
@@ -84,36 +82,21 @@ function loadPersisted(): Partial<Workspace> {
   }
 }
 
-type CopyMode = "image" | "link" | "ansi" | "chalk" | "text";
+type CopyMode = "image" | "ansi" | "chalk" | "text";
 
 const COPY_MODES: readonly { id: CopyMode; label: string }[] = [
   { id: "image", label: "image" },
-  { id: "link", label: "link" },
   { id: "ansi", label: "ANSI" },
   { id: "chalk", label: "chalk" },
   { id: "text", label: "text" },
 ];
 
-export interface AppProps {
-  /**
-   * The workspace this page was opened with, when the URL carried one. It wins
-   * outright over what is in `localStorage` — a shared link has to look the same
-   * to whoever opens it, and half of the sender's settings crossed with half of
-   * the reader's is nobody's picture.
-   */
-  shared?: Workspace | null;
-}
-
-export function App({ shared }: AppProps = {}) {
-  const persisted = useMemo(() => (shared ? {} : loadPersisted()), [shared]);
-  const [value, setValue] = useState<LineElement[]>(
-    () => shared?.document ?? persisted.document ?? sampleDocument(),
-  );
-  const [themeId, setThemeId] = useState(() => shared?.themeId ?? persisted.themeId ?? DEFAULT_THEME.id);
-  const [backgroundId, setBackgroundId] = useState(
-    () => shared?.backgroundId ?? persisted.backgroundId ?? DEFAULT_BACKGROUND_ID,
-  );
-  const [frame, setFrame] = useState<FrameSettings>(() => shared?.frame ?? persisted.frame ?? DEFAULT_FRAME);
+export function App() {
+  const persisted = useMemo(loadPersisted, []);
+  const [value, setValue] = useState<LineElement[]>(() => persisted.document ?? sampleDocument());
+  const [themeId, setThemeId] = useState(() => persisted.themeId ?? DEFAULT_THEME.id);
+  const [backgroundId, setBackgroundId] = useState(() => persisted.backgroundId ?? DEFAULT_BACKGROUND_ID);
+  const [frame, setFrame] = useState<FrameSettings>(() => persisted.frame ?? DEFAULT_FRAME);
   const [format, setFormat] = useState<ImageFormat>("png");
   const [copyMode, setCopyMode] = useState<CopyMode>("image");
   const [fontsReady, setFontsReady] = useState(false);
@@ -240,26 +223,10 @@ export function App({ shared }: AppProps = {}) {
     [renderLines, flash],
   );
 
-  /**
-   * A link that reopens this exact picture. Everything the render depends on
-   * rides in the fragment, so what comes up on the other side is the same image
-   * rather than the same document under the reader's own settings.
-   */
-  const handleCopyLink = useCallback(async () => {
-    try {
-      const url = await buildShareUrl({ document: value, themeId, backgroundId, frame }, window.location.href);
-      await copyText(url);
-      flash("Link copied");
-    } catch {
-      flash("Clipboard blocked");
-    }
-  }, [value, themeId, backgroundId, frame, flash]);
-
   const handleCopy = useCallback(async () => {
     if (copyMode === "image") await handleCopyImage();
-    else if (copyMode === "link") await handleCopyLink();
     else await copyAs(copyMode);
-  }, [copyMode, handleCopyImage, handleCopyLink, copyAs]);
+  }, [copyMode, handleCopyImage, copyAs]);
 
   /**
    * Swap the whole workspace out from under the editor. Slate takes its initial
@@ -294,22 +261,6 @@ export function App({ shared }: AppProps = {}) {
     });
   }, [applyWorkspace]);
 
-  /**
-   * A share link pasted into a tab that is already on Boron changes only the
-   * fragment, and a browser does not reload for that — so the load-time handoff
-   * in `main.tsx` never runs and the link would appear to do nothing at all.
-   */
-  useEffect(() => {
-    const onHashChange = () => {
-      void consumeSharedWorkspace().then((next) => {
-        if (!next) return;
-        applyWorkspace(next);
-        flash("Opened a shared link");
-      });
-    };
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
-  }, [applyWorkspace, flash]);
 
   // Dragging either edge of the block sets the minimum width. Captured on
   // pointerdown so the gesture survives the layout changing underneath it.

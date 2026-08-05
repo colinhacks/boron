@@ -2,117 +2,19 @@ import { describe, expect, it } from "vitest";
 import { MAX_LINES, type LineElement } from "./core/document.ts";
 import { DEFAULT_THEME } from "./core/themes.ts";
 import { DEFAULT_BACKGROUND_ID, TRANSPARENT_ID } from "./export/background.ts";
-import { DEFAULT_FRAME, MAX_TITLE_LENGTH, type FrameSettings } from "./export/layout.ts";
+import { DEFAULT_FRAME, MAX_TITLE_LENGTH } from "./export/layout.ts";
 import {
-  buildShareUrl,
-  decodeWorkspace,
-  encodeWorkspace,
   sanitizeBackgroundId,
   sanitizeDocument,
   sanitizeFrame,
   sanitizeThemeId,
-  shareParamFrom,
-  type Workspace,
+  sanitizeWorkspace,
 } from "./workspace.ts";
-
-const E = "\u001b";
 
 const document: LineElement[] = [
   { type: "line", children: [{ text: "$ npm run build" }] },
   { type: "line", children: [{ text: "built in 1.2s", fg: "green", bold: true }] },
 ];
-
-const frame: FrameSettings = {
-  framePadding: 96,
-  radius: 4,
-  showChrome: false,
-  title: "zsh — boron",
-  shadowStrength: 30,
-  minColumns: 64,
-};
-
-const workspace: Workspace = { document, themeId: "dracula", backgroundId: "ember", frame };
-
-/** Base64url of a JSON payload — the form a script with no compressor writes. */
-function plainPayload(payload: unknown): string {
-  const bytes = new TextEncoder().encode(JSON.stringify(payload));
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return `u${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
-}
-
-describe("encodeWorkspace / decodeWorkspace", () => {
-  it("round-trips a whole workspace", async () => {
-    const decoded = await decodeWorkspace(await encodeWorkspace(workspace));
-    expect(decoded).toEqual(workspace);
-  });
-
-  it("compresses, and stays inside a URL-safe alphabet", async () => {
-    const payload = await encodeWorkspace(workspace);
-    expect(payload.slice(0, 1)).toBe("z");
-    expect(payload.slice(1)).toMatch(/^[A-Za-z0-9_-]+$/);
-    expect(payload.length).toBeLessThan(JSON.stringify(workspace).length);
-  });
-
-  it("shortens rather than grows on repetitive output", async () => {
-    const repetitive: Workspace = {
-      ...workspace,
-      document: Array.from({ length: 40 }, (): LineElement => ({
-        type: "line",
-        children: [{ text: "npm warn deprecated something@1.0.0", fg: "yellow" }],
-      })),
-    };
-    const payload = await encodeWorkspace(repetitive);
-    expect(payload.length).toBeLessThan(JSON.stringify(repetitive).length / 4);
-  });
-
-  it("carries every setting, so nothing falls back to a default on the way", async () => {
-    const decoded = await decodeWorkspace(await encodeWorkspace(workspace));
-    expect(decoded?.frame).toEqual(frame);
-    expect(decoded?.themeId).toBe("dracula");
-    expect(decoded?.backgroundId).toBe("ember");
-  });
-
-  it("keeps a transparent backdrop transparent", async () => {
-    const decoded = await decodeWorkspace(
-      await encodeWorkspace({ ...workspace, backgroundId: TRANSPARENT_ID }),
-    );
-    expect(decoded?.backgroundId).toBe(TRANSPARENT_ID);
-  });
-
-  it("reads an uncompressed payload, so a link can be written without a compressor", async () => {
-    const decoded = await decodeWorkspace(plainPayload({ v: 1, doc: document, theme: "nord" }));
-    expect(decoded?.document).toEqual(document);
-    expect(decoded?.themeId).toBe("nord");
-  });
-
-  it("parses terminal output handed to it instead of a document", async () => {
-    const decoded = await decodeWorkspace(
-      plainPayload({ v: 1, ansi: `${E}[32mok${E}[0m\nsecond line` }),
-    );
-    expect(decoded?.document).toEqual([
-      { type: "line", children: [{ text: "ok", fg: "green" }] },
-      { type: "line", children: [{ text: "second line" }] },
-    ]);
-  });
-
-  it("fills in every setting a sparse payload leaves out", async () => {
-    const decoded = await decodeWorkspace(plainPayload({ v: 1, ansi: "hello" }));
-    expect(decoded?.themeId).toBe(DEFAULT_THEME.id);
-    expect(decoded?.backgroundId).toBe(DEFAULT_BACKGROUND_ID);
-    expect(decoded?.frame).toEqual(DEFAULT_FRAME);
-  });
-
-  it("rejects what isn't a payload", async () => {
-    expect(await decodeWorkspace("")).toBeNull();
-    expect(await decodeWorkspace("znot-base64-at-all-!!")).toBeNull();
-    expect(await decodeWorkspace(plainPayload({ v: 7, doc: document }))).toBeNull();
-    expect(await decodeWorkspace(plainPayload(["not", "an", "object"]))).toBeNull();
-    expect(await decodeWorkspace(`u${btoa("{ not json")}`)).toBeNull();
-    // Right flag, but the bytes are not DEFLATE.
-    expect(await decodeWorkspace("zaGVsbG8")).toBeNull();
-  });
-});
 
 describe("sanitizing", () => {
   it("clamps a frame that would take the layout somewhere silly", () => {
@@ -210,74 +112,32 @@ describe("sanitizing", () => {
   });
 
   /**
-   * A link is a few hundred bytes and the block neither scrolls nor virtualizes,
-   * so without a ceiling one click builds a document that hangs the tab — and it
-   * is persisted on arrival, so the next load hangs it again.
+   * The block neither scrolls nor virtualizes, so every line is a real DOM node.
+   * A stored workspace is the reader's own, but it is still bytes on disk that
+   * something else could have written.
    */
-  it("refuses a payload that would unpack into more document than anyone meant", async () => {
-    const justUnder = await encodeWorkspace({
-      ...workspace,
-      document: Array.from({ length: MAX_LINES }, () => ({ type: "line" as const, children: [{ text: "x" }] })),
-    });
-    expect((await decodeWorkspace(justUnder))?.document).toHaveLength(MAX_LINES);
-
-    // The cheap door: line count is a newline count, not an array anyone writes.
-    const bomb = plainPayload({ v: 1, ansi: "hello\n".repeat(MAX_LINES + 1) });
-    expect(await decodeWorkspace(bomb)).toBeNull();
-
-    expect(
-      sanitizeDocument(Array.from({ length: MAX_LINES + 1 }, () => ({ type: "line", children: [{ text: "x" }] }))),
-    ).toBeNull();
+  it("refuses more document than anyone meant", () => {
+    const line = () => ({ type: "line", children: [{ text: "x" }] });
+    expect(sanitizeDocument(Array.from({ length: MAX_LINES }, line))).toHaveLength(MAX_LINES);
+    expect(sanitizeDocument(Array.from({ length: MAX_LINES + 1 }, line))).toBeNull();
   });
 
   it("clamps the title to what the sidebar can produce", () => {
     expect(sanitizeFrame({ title: "z".repeat(500) }).title).toHaveLength(MAX_TITLE_LENGTH);
   });
 
-  it("holds that door on the way in from a link", async () => {
-    const decoded = await decodeWorkspace(
-      plainPayload({
-        v: 1,
-        doc: [{ type: "line", children: [{ text: "hi", fg: "rebeccapurple", bold: true }] }],
-      }),
+  it("holds that door for a whole workspace, not just a document", () => {
+    const restored = sanitizeWorkspace(
+      {
+        document: [{ type: "line", children: [{ text: "hi", fg: "rebeccapurple", bold: true }] }],
+        themeId: "nord",
+        backgroundId: "mint",
+        frame: { framePadding: 12 },
+      },
+      document,
     );
-    expect(decoded?.document).toEqual([{ type: "line", children: [{ text: "hi", bold: true }] }]);
-  });
-});
-
-describe("the URL", () => {
-  it("puts the payload in the query string, on a clean address", async () => {
-    const url = await buildShareUrl(workspace, "https://boron.sh/?utm=x#s=stale");
-    expect(url.startsWith("https://boron.sh/?s=")).toBe(true);
-    expect(await decodeWorkspace(shareParamFrom(url)!)).toEqual(workspace);
-  });
-
-  /**
-   * A fragment never reaches the server, so it has no practical length limit; a
-   * query string travels in the request line and somebody else's proxy decides
-   * how long that may be. A link that works beats a link that could carry a card.
-   */
-  it("falls back to the fragment when the query string would get too long", async () => {
-    const big: Workspace = {
-      ...workspace,
-      // Random-ish text so it does not simply compress away.
-      document: Array.from({ length: 400 }, (_, line): LineElement => ({
-        type: "line",
-        children: [{ text: `${line} ${Math.PI * line} ${(line * 2654435761) % 1000000}`.repeat(4) }],
-      })),
-    };
-    const url = await buildShareUrl(big, "https://boron.sh/");
-    expect(url.length).toBeGreaterThan(8000);
-    expect(url).toContain("#s=");
-    expect(url).not.toContain("?s=");
-    expect(await decodeWorkspace(shareParamFrom(url)!)).toEqual(big);
-  });
-
-  it("reads the payload from either half of a URL", () => {
-    expect(shareParamFrom("https://boron.sh/#s=abc")).toBe("abc");
-    expect(shareParamFrom("https://boron.sh/?s=abc")).toBe("abc");
-    expect(shareParamFrom("https://boron.sh/?s=query#s=fragment")).toBe("fragment");
-    expect(shareParamFrom("https://boron.sh/")).toBeNull();
-    expect(shareParamFrom("not a url")).toBeNull();
+    expect(restored.document).toEqual([{ type: "line", children: [{ text: "hi", bold: true }] }]);
+    expect(restored.themeId).toBe("nord");
+    expect(restored.frame).toEqual({ ...DEFAULT_FRAME, framePadding: 12 });
   });
 });
