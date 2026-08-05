@@ -34,6 +34,12 @@
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.3.0",
     "culori": "^4.0.2",
+    "prosemirror-commands": "^1.7.1",
+    "prosemirror-history": "^1.5.0",
+    "prosemirror-keymap": "^1.2.3",
+    "prosemirror-model": "^1.25.11",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-view": "^1.42.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "slate": "^0.126.0",
