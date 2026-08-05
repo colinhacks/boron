@@ -228,7 +228,11 @@ export function App() {
             <Logo />
           </span>
           <span className="brand__name">Boron</span>
-          <span className="brand__tagline">gorgeous editable terminal screenshots</span>
+          {/* Set in the terminal face, like the OG card and the block itself —
+              a tagline about terminal output should look like terminal output. */}
+          <span className="brand__tagline" style={{ fontFamily: FONT_FAMILY }}>
+            gorgeous editable terminal screenshots
+          </span>
         </div>
 
         <div className="export-bar">
