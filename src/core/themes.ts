@@ -37,7 +37,12 @@ function makeTheme(spec: ThemeSpec): Theme {
     background: spec.background,
     foreground: spec.foreground,
     ansi: spec.ansi,
-    selection: blend(spec.foreground, spec.background, isLight ? 0.7 : 0.75),
+    // Nearly the foreground, pulled just off it. This is painted translucent
+    // (see `::selection` in `index.css`), and that alpha is spoken for — it is
+    // what lets a selected run's fill read through — so all of the contrast has
+    // to come from the colour. Blending most of the way to the background here
+    // as well is what made a drag-select almost invisible.
+    selection: blend(spec.foreground, spec.background, isLight ? 0.2 : 0.15),
   };
 }
 

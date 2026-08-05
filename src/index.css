@@ -380,6 +380,9 @@ input {
  * colour you are picking and the swatch would look like it did nothing until
  * you clicked away. Letting the fill read through is worth more here than
  * matching a terminal exactly.
+ *
+ * The alpha is the lever for that read-through and nothing else — how visible
+ * the highlight is comes from `--boron-selection` itself.
  */
 .terminal-editable::selection,
 .terminal-editable *::selection {
