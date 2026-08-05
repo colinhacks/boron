@@ -98,7 +98,6 @@ function SwatchRow({ label, markKey, active, theme, onPick }: SwatchRowProps) {
           className={`swatch swatch--clear${active === undefined ? " swatch--active" : ""}`}
           title={`Default ${label.toLowerCase()} — SGR ${background ? 49 : 39}`}
           aria-label={`Default ${label.toLowerCase()}`}
-          onMouseDown={(event) => event.preventDefault()}
           onClick={() => onPick(null)}
         >
           ⁄
