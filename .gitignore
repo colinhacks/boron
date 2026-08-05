@@ -5,6 +5,7 @@ dist
 *.log
 .DS_Store
 .fray
+.frizz
 .vercel
 
 # Logo exploration output — regenerate with the scripts in logo-concepts/.
@@ -12,3 +13,5 @@ dist
 logo-concepts/*.svg
 logo-concepts/*.png
 logo-concepts/*.html
+# ...except the OG card, which is a committed source rather than exploration.
+!logo-concepts/og-card.html

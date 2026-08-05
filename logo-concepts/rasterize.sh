@@ -16,7 +16,8 @@ png favicon.svg    32   32 favicon-32.png
 png favicon.svg    16   16 favicon-16.png
 
 echo "social:"
-png og.svg       1200  630 og.png
+# og.png is not built here — it needs JetBrains Mono, which rsvg-convert cannot
+# resolve. Run logo-concepts/render-og.sh for that one.
 png lockup.svg    840  256 lockup.png
 
 echo "ico:"

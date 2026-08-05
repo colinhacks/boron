@@ -100,14 +100,9 @@ files["lockup-light.svg"] = files["lockup.svg"]
   .replaceAll(`fill="${BG}"`, `fill="${LIGHT_BG}"`)
   .replaceAll(`fill="${FG}"`, `fill="#1c1f2b"`);
 
-// Open Graph card at the size Twitter and Slack actually crop to.
-files["og.svg"] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
-  <rect width="1200" height="630" fill="${BG}"/>
-${mark({ cell: 30, gap: 4, cx: 600, cy: 232 })}
-  <text x="600" y="452" text-anchor="middle" font-family="ui-monospace, 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace" font-size="76" font-weight="500" fill="${FG}" letter-spacing="-2">boron</text>
-  <text x="600" y="512" text-anchor="middle" font-family="ui-monospace, 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace" font-size="28" fill="${DIM}">beautiful images of your terminal</text>
-</svg>
-`;
+// The Open Graph card is NOT generated here. It is set in JetBrains Mono, which
+// rsvg-convert cannot resolve (see logo-concepts/render-og.sh), so it is authored
+// as HTML in logo-concepts/og-card.html and rendered by a browser instead.
 
 for (const [name, svg] of Object.entries(files)) writeFileSync(join(OUT, name), svg);
 

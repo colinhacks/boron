@@ -41,7 +41,10 @@ Everything in `public/` — the mark, favicons, icons, the Open Graph card — i
 ```
 node logo-concepts/build-assets.mjs   # → public/*.svg
 ./logo-concepts/rasterize.sh          # → public/*.png and favicon.ico
+./logo-concepts/render-og.sh          # → public/og.png
 ```
+
+**The Open Graph card is the exception** and does not go through the SVG pipeline. It is set in JetBrains Mono, which lives in `node_modules` as a woff2; `rsvg-convert` resolves fonts through fontconfig, finds no system copy, and silently substitutes a generic mono. So the card is authored as HTML in `logo-concepts/og-card.html` — the one file in that folder that is committed rather than gitignored — and rendered by headless Chrome. Edit the HTML, re-run `render-og.sh`, commit the PNG.
 
 The cell grid, the gaps and the color ramp live as data at the top of `build-assets.mjs`, so retuning the mark is a one-line change that propagates to every asset. `src/ui/Logo.tsx` mirrors the same geometry for the in-app header and has to be updated alongside it.
 
