@@ -49,8 +49,8 @@ describe("themedBackground", () => {
    * these are pinned rather than merely asserted to be self-consistent.
    */
   it("settles ties the same way everywhere", () => {
-    expect(themedBackground(backgroundById("midnight")!, nord)!.stops).toEqual(["#007b7a", "#184c79"]);
-    expect(themedBackground(ember, nord)!.stops).toEqual(["#c0767b", "#846620"]);
+    expect(themedBackground(backgroundById("midnight")!, nord)!.stops).toEqual(["#007b7a", "#174c79"]);
+    expect(themedBackground(ember, nord)!.stops).toEqual(["#c0757b", "#846620"]);
   });
 
   it("runs a muted theme's backdrop less saturated than a vivid one's", () => {

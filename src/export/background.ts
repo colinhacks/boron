@@ -42,9 +42,14 @@ export const TRANSPARENT_ID = "none";
  */
 const SWEEP = 55;
 
-/** Authored saturation. `themedBackground` caps it per theme, so this is a
- *  ceiling rather than a promise, and one value keeps that cap even-handed. */
-const CHROMA = 0.16;
+/**
+ * Authored saturation, deliberately above what most themes will allow.
+ * `themedBackground` caps each stop at the theme's own chroma, so this is the
+ * headroom that cap works against rather than a promise. At 0.16 it sat *below*
+ * the cap for five of the eight themes, which quietly made the adaptation a
+ * no-op for them; at 0.22 the theme is what decides, which is the whole point.
+ */
+const CHROMA = 0.22;
 
 /** How much darker a gradient ends than it starts. */
 const FALL = 0.12;
