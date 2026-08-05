@@ -21,6 +21,13 @@ const BLOCK_DISPLAYS = new Set([
 interface Inherited {
   color: string | null;
   background: string | null;
+  /**
+   * The colors the nearest block ancestor declared, as opposed to the ones a run
+   * put on itself. A color on a row is a backdrop the whole row sits on; a color
+   * on a run is the terminal actually saying something.
+   */
+  rowColor: string | null;
+  rowBackground: string | null;
   bold: boolean;
   dim: boolean;
   italic: boolean;
@@ -45,6 +52,73 @@ function parseInlineStyle(value: string): Declarations {
   return out;
 }
 
+interface StyleRule {
+  selector: string;
+  declarations: Declarations;
+  specificity: number;
+  order: number;
+}
+
+/** Approximate CSS specificity — enough to order rules that target one element. */
+function specificity(selector: string): number {
+  const ids = (selector.match(/#[\w-]+/g) ?? []).length;
+  const classes = (selector.match(/[.:[][\w-]+/g) ?? []).length;
+  const tags = (selector.match(/(^|[\s>+~])[a-z][\w-]*/gi) ?? []).length;
+  return ids * 10000 + classes * 100 + tags;
+}
+
+/**
+ * The rules in the document's `<style>` blocks, in cascade order.
+ *
+ * Terminals that write their own clipboard HTML put everything in a `style`
+ * attribute, so for a long time reading that attribute was enough. macOS's
+ * RTF-to-HTML conversion does not: it emits `p.p1 { color: … }` into a
+ * stylesheet and leaves the elements carrying nothing but a class. Every
+ * terminal that writes RTF and no HTML — Terminal.app, iTerm2 — arrives in that
+ * shape, and going by the attribute alone drops every color they send.
+ */
+function collectRules(doc: Document): StyleRule[] {
+  const rules: StyleRule[] = [];
+  for (const style of Array.from(doc.getElementsByTagName("style"))) {
+    // Comments go first so a commented-out brace cannot unbalance the split.
+    const css = (style.textContent ?? "").replace(/\/\*[\s\S]*?\*\//g, "");
+    const block = /([^{}]+)\{([^{}]*)\}/g;
+    let match: RegExpExecArray | null;
+    while ((match = block.exec(css))) {
+      const declarations = parseInlineStyle(match[2] ?? "");
+      for (const selector of (match[1] ?? "").split(",")) {
+        const trimmed = selector.trim();
+        // At-rules carry their own nested blocks and their own conditions, and
+        // neither survives a flat scan like this one.
+        if (!trimmed || trimmed.startsWith("@")) continue;
+        rules.push({ selector: trimmed, declarations, specificity: specificity(trimmed), order: rules.length });
+      }
+    }
+  }
+  return rules;
+}
+
+/** What the stylesheet and the `style` attribute together say about one element. */
+function declarationsFor(element: Element, rules: readonly StyleRule[]): Declarations {
+  const inline = parseInlineStyle(element.getAttribute("style") ?? "");
+  if (rules.length === 0) return inline;
+
+  const matched = rules.filter((rule) => {
+    try {
+      return element.matches(rule.selector);
+    } catch {
+      // A selector this DOM cannot parse simply does not apply.
+      return false;
+    }
+  });
+  matched.sort((a, b) => a.specificity - b.specificity || a.order - b.order);
+
+  const out: Declarations = {};
+  for (const rule of matched) Object.assign(out, rule.declarations);
+  // The attribute outranks anything the stylesheet said.
+  return Object.assign(out, inline);
+}
+
 function normalizeColor(value: string | undefined): string | null {
   if (!value) return null;
   const trimmed = value.trim().toLowerCase();
@@ -57,7 +131,12 @@ function normalizeColor(value: string | undefined): string | null {
  * Read what a terminal's clipboard HTML says about one element, layered on top
  * of what it inherited.
  */
-function descend(element: Element, parent: Inherited, declarations: Declarations): Inherited {
+function descend(
+  element: Element,
+  parent: Inherited,
+  declarations: Declarations,
+  isBlock: boolean,
+): Inherited {
   const next: Inherited = { ...parent };
   const tag = element.tagName.toLowerCase();
 
@@ -75,6 +154,11 @@ function descend(element: Element, parent: Inherited, declarations: Declarations
 
   const background = normalizeColor(declarations["background-color"] ?? declarations["background"]);
   if (background) next.background = background;
+
+  if (isBlock) {
+    if (color) next.rowColor = color;
+    if (background) next.rowBackground = background;
+  }
 
   const weight = declarations["font-weight"];
   if (weight) {
@@ -101,13 +185,30 @@ function descend(element: Element, parent: Inherited, declarations: Declarations
   return next;
 }
 
-interface Collector {
-  lines: ParsedSpan[][];
-  current: ParsedSpan[];
+/**
+ * A run of text with the styling that reached it.
+ *
+ * Held raw rather than converted to marks on the spot, because which colors
+ * count as "no color at all" is not known until the whole document has been
+ * read — see `defaultColors`.
+ */
+interface Run {
+  text: string;
+  style: Inherited;
 }
 
-function pushText(collector: Collector, text: string, style: Inherited, defaults: Defaults): void {
+interface Collector {
+  lines: Run[][];
+  current: Run[];
+}
+
+function pushText(collector: Collector, text: string, style: Inherited): void {
   if (text.length === 0) return;
+  collector.current.push({ text, style });
+}
+
+function toSpan(run: Run, defaults: Defaults): ParsedSpan {
+  const { style } = run;
   // A color the palette cannot read leaves the run uncolored rather than
   // carrying something no escape code can say.
   const named = (value: string | null, base: string | null): Color | null =>
@@ -123,7 +224,7 @@ function pushText(collector: Collector, text: string, style: Inherited, defaults
     ...(style.underline ? { underline: true as const } : {}),
     ...(style.strikethrough ? { strikethrough: true as const } : {}),
   };
-  collector.current.push({ text, marks });
+  return { text: run.text, marks };
 }
 
 function breakLine(collector: Collector): void {
@@ -132,13 +233,13 @@ function breakLine(collector: Collector): void {
 }
 
 interface Defaults {
-  /** The wrapper's foreground — spans wearing it are treated as unstyled. */
+  /** The foreground standing in for "no color" — runs wearing it are unstyled. */
   color: string | null;
   background: string | null;
   ansi16: readonly string[];
 }
 
-function walk(node: Node, style: Inherited, collector: Collector, defaults: Defaults): void {
+function walk(node: Node, style: Inherited, collector: Collector, rules: readonly StyleRule[]): void {
   if (node.nodeType === 3 /* Text */) {
     const raw = node.nodeValue ?? "";
     const text = raw.replace(/\u00a0/g, " ");
@@ -146,12 +247,12 @@ function walk(node: Node, style: Inherited, collector: Collector, defaults: Defa
       const parts = text.split("\n");
       parts.forEach((part, index) => {
         if (index > 0) breakLine(collector);
-        pushText(collector, part, style, defaults);
+        pushText(collector, part, style);
       });
     } else {
       // Outside `white-space: pre`, a newline in the markup is source
       // formatting, not content — drop it along with the indentation it drags in.
-      pushText(collector, text.replace(/[ \t]*[\r\n]+[ \t]*/g, ""), style, defaults);
+      pushText(collector, text.replace(/[ \t]*[\r\n]+[ \t]*/g, ""), style);
     }
     return;
   }
@@ -166,15 +267,20 @@ function walk(node: Node, style: Inherited, collector: Collector, defaults: Defa
     return;
   }
 
-  const declarations = parseInlineStyle(element.getAttribute("style") ?? "");
+  const declarations = declarationsFor(element, rules);
   const display = (declarations["display"] ?? "").trim().toLowerCase();
   if (display === "none") return;
 
   const isBlock = INLINE_DISPLAYS.has(display) ? false : BLOCK_DISPLAYS.has(display) || BLOCK_TAGS.has(tag);
   if (isBlock && collector.current.length > 0) breakLine(collector);
 
-  const next = descend(element, style, declarations);
-  for (const child of Array.from(element.childNodes)) walk(child, next, collector, defaults);
+  // Same distinction `findRootColors` draws: an element whose entire content is
+  // text is a styled run, not a row, however it is displayed — so its color is
+  // something the terminal said and not a backdrop to discount.
+  const children = Array.from(element.childNodes);
+  const isStyledRun = children.length > 0 && children.every((child) => child.nodeType === 3);
+  const next = descend(element, style, declarations, isBlock && !isStyledRun);
+  for (const child of Array.from(element.childNodes)) walk(child, next, collector, rules);
 
   if (isBlock && collector.current.length > 0) breakLine(collector);
 }
@@ -190,7 +296,10 @@ function walk(node: Node, style: Inherited, collector: Collector, defaults: Defa
  * whose entire content is text is skipped — that is a styled run, not a
  * container, and its color is real.
  */
-function findRootColors(body: Element): { color: string | null; background: string | null } {
+function findRootColors(
+  body: Element,
+  rules: readonly StyleRule[],
+): { color: string | null; background: string | null } {
   let color: string | null = null;
   let background: string | null = null;
   let current: Element | null = body;
@@ -200,7 +309,7 @@ function findRootColors(body: Element): { color: string | null; background: stri
     const isStyledRun = children.length > 0 && children.every((node) => node.nodeType === 3);
 
     if (!isStyledRun) {
-      const declarations = parseInlineStyle(current.getAttribute("style") ?? "");
+      const declarations = declarationsFor(current, rules);
       color ??= normalizeColor(declarations["color"]);
       background ??= normalizeColor(declarations["background-color"] ?? declarations["background"]);
     }
@@ -211,6 +320,47 @@ function findRootColors(body: Element): { color: string | null; background: stri
   }
 
   return { color, background };
+}
+
+/**
+ * The colors standing in for "no color at all" when there is no wrapper to read
+ * them off.
+ *
+ * macOS's RTF-to-HTML conversion offers nothing for `findRootColors` to walk: it
+ * emits one `<p>` per row directly under `<body>`, and hangs the profile's
+ * colors on every one of them. What is left is a frequency signal. A color a
+ * *row* declares is a backdrop the whole row sits on rather than the terminal
+ * saying something, so the row color most of the text is sitting on is the one
+ * to treat as unstyled.
+ *
+ * Deliberately reads only row-declared colors, never a run's own. Markup that
+ * colors individual runs and nothing else — which is most terminals, and every
+ * hand-written snippet — offers no candidates here and is left exactly as it
+ * was, with every one of its colors intact.
+ */
+function defaultColors(lines: readonly Run[][]): { color: string | null; background: string | null } {
+  const colors = new Map<string, number>();
+  const backgrounds = new Map<string, number>();
+
+  for (const line of lines) {
+    for (const run of line) {
+      if (run.text.length === 0) continue;
+      const { rowColor, rowBackground } = run.style;
+      if (rowColor) colors.set(rowColor, (colors.get(rowColor) ?? 0) + run.text.length);
+      if (rowBackground) backgrounds.set(rowBackground, (backgrounds.get(rowBackground) ?? 0) + run.text.length);
+    }
+  }
+
+  const commonest = (counts: Map<string, number>): string | null => {
+    let best: string | null = null;
+    let bestCount = 0;
+    for (const [value, count] of counts) {
+      if (count > bestCount) [best, bestCount] = [value, count];
+    }
+    return best;
+  };
+
+  return { color: commonest(colors), background: commonest(backgrounds) };
 }
 
 /**
@@ -230,13 +380,15 @@ export function parseHtmlClipboard(html: string, ansi16: readonly string[]): Par
   const body = parsed.body;
   if (!body) return null;
 
-  const root = findRootColors(body);
-  const defaults: Defaults = { color: root.color, background: root.background, ansi16 };
+  const rules = collectRules(parsed);
+  const root = findRootColors(body, rules);
 
   const collector: Collector = { lines: [], current: [] };
   const initial: Inherited = {
     color: null,
     background: null,
+    rowColor: null,
+    rowBackground: null,
     bold: false,
     dim: false,
     italic: false,
@@ -245,11 +397,20 @@ export function parseHtmlClipboard(html: string, ansi16: readonly string[]): Par
     preserveWhitespace: false,
   };
 
-  for (const child of Array.from(body.childNodes)) walk(child, initial, collector, defaults);
+  for (const child of Array.from(body.childNodes)) walk(child, initial, collector, rules);
   if (collector.current.length > 0) breakLine(collector);
 
-  const lines: ParsedLine[] = collector.lines.map((spans) => ({
-    spans: spans.length > 0 ? spans : [{ text: "", marks: {} }],
+  // The wrapper wins where there is one; the rows only stand in for it when
+  // there is not.
+  const fallback = defaultColors(collector.lines);
+  const defaults: Defaults = {
+    color: root.color ?? fallback.color,
+    background: root.background ?? fallback.background,
+    ansi16,
+  };
+
+  const lines: ParsedLine[] = collector.lines.map((runs) => ({
+    spans: runs.length > 0 ? runs.map((run) => toSpan(run, defaults)) : [{ text: "", marks: {} }],
   }));
 
   while (lines.length > 0 && lines[lines.length - 1]!.spans.every((span) => span.text.trim() === "")) {

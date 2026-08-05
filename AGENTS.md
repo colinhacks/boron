@@ -40,7 +40,11 @@ The whole workspace — document, theme, backdrop and frame settings — is save
 
 ## Clipboard fixtures
 
-`src/core/clipboard-fixtures.ts` holds rich-text clipboard payloads captured **verbatim off a real system pasteboard**. Terminals disagree enough about their `text/html` flavour that invented markup only tests your imagination — Ghostty marks every styled run as a `<div style="display: inline">` while VS Code and Konsole use one block element per row, and iTerm2, Terminal.app, kitty, WezTerm and Alacritty write no HTML at all.
+`src/core/clipboard-fixtures.ts` holds rich-text clipboard payloads captured **verbatim from a real copy**. Terminals disagree enough about their `text/html` flavour that invented markup only tests your imagination — Ghostty marks every styled run as a `<div style="display: inline">`, VS Code and Konsole use one block element per row, and Terminal.app states its colours only in class-based CSS in a `<style>` block, with each row's dominant colour on the `<p>` and the runs that differ overriding it.
+
+**Capture it the way the app receives it — off a real paste event, not off the pasteboard.** On macOS those are not the same thing. Terminal.app and iTerm2 write no HTML flavour at all, only `public.rtf`, and inspecting the pasteboard makes them look unsupportable. They aren't: Chrome converts RTF through `NSAttributedString` on the way in, so the page is handed a full `text/html` that the pasteboard never held. That conversion is Chrome's own and exists **only on macOS** — on Windows and Linux a terminal has to write HTML itself, so the same terminal can work on one platform and not another. `text/rtf` also reaches the paste event intact, if it is ever worth parsing directly.
+
+Two consequences worth knowing. Rich-text copy is often **off by default**: iTerm2 needs Cmd-Opt-C rather than Cmd-C, and Windows Terminal needs `copyFormatting` set — its default is plain text only. And a terminal that hands us colours may state them per *row* rather than per *run*; `defaultColors` in `html-paste.ts` is what stops those rows from painting a colour onto every character.
 
 If you need to support another terminal, capture its real bytes and add them there rather than writing markup you believe it emits.
 

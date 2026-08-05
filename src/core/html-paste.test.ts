@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GHOSTTY_1_3_1 } from "./clipboard-fixtures.ts";
+import { GHOSTTY_1_3_1, TERMINAL_APP_2_15 } from "./clipboard-fixtures.ts";
 import { parseHtmlClipboard } from "./html-paste.ts";
 import { DEFAULT_THEME } from "./themes.ts";
 
@@ -130,5 +130,66 @@ describe("parseHtmlClipboard", () => {
     expect(marksFor("italic")).toEqual({ italic: true });
     expect(marksFor("strike")).toEqual({ strikethrough: true });
     expect(marksFor(" trailing-plain")).toEqual({});
+  });
+
+  it("reads styling out of a <style> block, not just the style attribute", () => {
+    const html = '<style>.a { color: #cd3131 } .b { font-weight: bold }</style>' +
+      '<div><span class="a">r</span><span class="b">b</span></div>';
+    expect(shape(html)).toEqual([[["r", { fg: "red" }], ["b", { bold: true }]]]);
+  });
+
+  it("lets the style attribute outrank the stylesheet", () => {
+    const html = '<style>span { color: #cd3131 }</style>' +
+      '<div><span style="color: #0dbc79">x</span></div>';
+    expect(shape(html)).toEqual([[["x", { fg: "green" }]]]);
+  });
+
+  it("orders competing rules by specificity rather than by source order", () => {
+    const html = '<style>span.a { color: #0dbc79 } span { color: #cd3131 }</style>' +
+      '<div><span class="a">x</span></div>';
+    expect(shape(html)).toEqual([[["x", { fg: "green" }]]]);
+  });
+
+  it("keeps Terminal.app's rows whole, though it writes one <p> per row", () => {
+    const lines = parseHtmlClipboard(TERMINAL_APP_2_15, ansi16)!;
+    expect(lines.map((line) => line.spans.map((span) => span.text).join(""))).toEqual([
+      "zshy git:(main) frizz-dev",
+      "",
+      "  FRIZZ v0.2.0  ready in 21s",
+      "",
+      "  ➜  Local:    http://127.0.0.1:4918/",
+      "  ➜  Project:  zshy — ~/Documents/projects/zshy",
+      "  ➜  Source:   ~/Documents/projects/fray",
+      "  ➜  Logs:     ~/.frizz/projects/2c4cddd3-198f-4108-896f-a6dfa5440d8f/logs/frizz-2026-08-05T09-25-29-3704.log",
+      "",
+      "  press ctrl-c to stop · run with --debug for the full event feed",
+    ]);
+  });
+
+  it("recovers the colors Terminal.app only ever states in class-based CSS", () => {
+    const lines = parseHtmlClipboard(TERMINAL_APP_2_15, ansi16)!;
+    const marksFor = (text: string) =>
+      lines.flatMap((line) => line.spans).find((span) => span.text === text)?.marks;
+
+    expect(marksFor("zshy")).toEqual({ fg: "cyan", bold: true });
+    expect(marksFor("main")).toEqual({ fg: "red", bold: true });
+    expect(marksFor("http://127.0.0.1:4918/")).toEqual({ fg: "cyan" });
+  });
+
+  it("treats the color Terminal.app puts on every row as no color at all", () => {
+    const lines = parseHtmlClipboard(TERMINAL_APP_2_15, ansi16)!;
+    const marksFor = (text: string) =>
+      lines.flatMap((line) => line.spans).find((span) => span.text === text)?.marks;
+
+    // Terminal.app hangs the profile's own foreground on each <p>. Taking it as
+    // a mark would color every character and switch the prompt heuristic off.
+    expect(marksFor("ready in 21s")).toEqual({});
+    expect(marksFor("~/Documents/projects/fray")).toEqual({});
+    expect(marksFor("press ctrl-c to stop · run with --debug for the full event feed")).toEqual({});
+  });
+
+  it("discounts the terminal background rather than painting it onto every run", () => {
+    const lines = parseHtmlClipboard(TERMINAL_APP_2_15, ansi16)!;
+    expect(lines.flatMap((line) => line.spans).every((span) => span.marks.bg === undefined)).toBe(true);
   });
 });
