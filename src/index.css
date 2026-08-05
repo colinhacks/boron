@@ -197,8 +197,15 @@ input {
   transform: translateY(-1px);
 }
 
+/*
+ * A neutral ring rather than the accent one. The indicator sits around a colour
+ * the user chose, so it cannot be a hue itself — the violet ring vanished
+ * against the blue and magenta swatches, which is exactly where you look for it.
+ * The offset leaves a gap of panel between swatch and ring, which is what keeps
+ * it legible around the near-white end of the palette too.
+ */
 .swatch--active {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--text);
   outline-offset: 2px;
 }
 
@@ -235,30 +242,39 @@ input {
   color: var(--text);
 }
 
+/*
+ * State lives on the button, the preview lives on the label, and the two never
+ * touch. They used to: `.chip--dim` put `opacity` on the *button*, which fades
+ * its border as well, so the one chip whose own effect is low contrast was also
+ * the one whose selected ring was washed out — it read as disabled while it was
+ * switched on.
+ */
 .chip--active {
-  background: var(--accent-soft);
-  border-color: rgba(124, 92, 255, 0.55);
-  color: #cbbcff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
 }
 
-.chip--ghost {
-  background: transparent;
-}
-
-.chip--bold {
+.chip--bold .chip__label {
   font-weight: 700;
 }
-.chip--italic {
+.chip--italic .chip__label {
   font-style: italic;
 }
-.chip--underline {
+.chip--underline .chip__label {
   text-decoration: underline;
 }
-.chip--strikethrough {
+.chip--strikethrough .chip__label {
   text-decoration: line-through;
 }
-.chip--dim {
-  opacity: 0.7;
+.chip--dim .chip__label {
+  opacity: 0.55;
+}
+/* Lifted against the filled background, so it still reads as faint without
+   reading as off. */
+.chip--active.chip--dim .chip__label {
+  opacity: 0.72;
 }
 
 /* ---------------------------------------------------------------- stage -- */
@@ -296,7 +312,8 @@ input {
 }
 
 /*
- * Grab either edge of the block to set its minimum width. Sits astride the
+ * Grab either edge of the block to set how many columns wide it is, which the
+ * text then reflows to. Sits astride the
  * terminal's border rather than inside it, so it never competes with the editor
  * for a click, and it is invisible until the pointer finds it.
  *
@@ -389,8 +406,14 @@ input {
   background-color: color-mix(in srgb, var(--boron-selection) 45%, transparent);
 }
 
+/*
+ * The row is the wrapping box, not the editable, because the two are not always
+ * the same width: a long window title widens the block, and the text still has
+ * to break at the column count the export measured.
+ */
 .terminal-line {
   min-height: 1em;
+  width: var(--boron-wrap-width);
 }
 
 /* -------------------------------------------------------------- sidebar -- */

@@ -34,10 +34,10 @@ function clampedNumber(value: unknown, fallback: number, min: number, max: numbe
 /**
  * A frame from an untrusted source, clamped to what the app can actually draw.
  *
- * The bounds are wider than the sidebar's sliders on purpose — a drag can push
- * the minimum width past what the slider offers — but they are bounds: a link
- * carrying a padding of a million should open, not hang the tab laying out an
- * image nobody can see.
+ * The bounds are wider than the controls on purpose — a stored workspace predates
+ * whatever range they offer today — but they are bounds: a link carrying a
+ * padding of a million should open, not hang the tab laying out an image nobody
+ * can see.
  */
 export function sanitizeFrame(input: unknown): FrameSettings {
   if (typeof input !== "object" || input === null) return { ...DEFAULT_FRAME };
@@ -48,7 +48,7 @@ export function sanitizeFrame(input: unknown): FrameSettings {
     showChrome: typeof frame.showChrome === "boolean" ? frame.showChrome : DEFAULT_FRAME.showChrome,
     title: typeof frame.title === "string" ? frame.title.slice(0, MAX_TITLE_LENGTH) : DEFAULT_FRAME.title,
     shadowStrength: clampedNumber(frame.shadowStrength, DEFAULT_FRAME.shadowStrength, 0, 100),
-    minColumns: Math.round(clampedNumber(frame.minColumns, DEFAULT_FRAME.minColumns, 1, 400)),
+    columns: Math.round(clampedNumber(frame.columns, DEFAULT_FRAME.columns, 1, 400)),
   };
 }
 

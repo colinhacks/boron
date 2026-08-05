@@ -62,6 +62,8 @@ export interface TerminalSurfaceProps {
   halfLeading: number;
   padding: number;
   width: number;
+  /** Where a line wraps. Narrower than `width` when a long title widened the block. */
+  wrapWidth: number;
 }
 
 /** The editable itself. `<Slate>` lives higher up so the toolbar shares its context. */
@@ -73,6 +75,7 @@ export function TerminalSurface({
   halfLeading,
   padding,
   width,
+  wrapWidth,
 }: TerminalSurfaceProps) {
   const decorate = useMemo(() => createDecorator(editor), [editor]);
   const leafSettings = useMemo<LeafSettings>(() => ({ theme, halfLeading }), [theme, halfLeading]);
@@ -130,10 +133,32 @@ export function TerminalSurface({
           fontSize,
           lineHeight: `${lineHeight}px`,
           caretColor: theme.foreground,
-          // Terminals do not reflow, and neither does the exported image — so
-          // override Slate's default `pre-wrap` to keep the two in agreement.
-          whiteSpace: "pre",
-          wordWrap: "normal",
+          /*
+           * The block wraps where a terminal of this many columns would, which
+           * takes all three of these — `computeLayout` cuts the exported rows to
+           * a plain character count (`wrapRenderLines`) and the preview has to
+           * land on the same characters.
+           *
+           * `break-spaces` because a space that falls on the boundary occupies a
+           * cell in a terminal; under `pre-wrap` the browser hangs it past the
+           * edge and starts the next row one character earlier.
+           *
+           * `line-break: anywhere` because the line-breaking algorithm otherwise
+           * refuses to break *before* a space (UAX #14 LB7) and backs the break
+           * up a column when one lands there — measured, not assumed: with it,
+           * `"b" × 80 + " x"` breaks after 80; without it, after 79. `anywhere`
+           * is defined as disregarding those prohibitions, which is exactly what
+           * a terminal does.
+           *
+           * `break-all` is the fallback for a browser without `anywhere`: it
+           * gets everything except the space case right, rather than reflowing
+           * to word boundaries the export knows nothing about.
+           */
+          whiteSpace: "break-spaces",
+          lineBreak: "anywhere",
+          wordBreak: "break-all",
+          overflowWrap: "normal",
+          ["--boron-wrap-width" as string]: `${wrapWidth}px`,
           ["--boron-selection" as string]: theme.selection,
         }}
       />

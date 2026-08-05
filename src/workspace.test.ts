@@ -19,13 +19,13 @@ const document: LineElement[] = [
 describe("sanitizing", () => {
   it("clamps a frame that would take the layout somewhere silly", () => {
     expect(
-      sanitizeFrame({ framePadding: 1e9, radius: -40, shadowStrength: 900, minColumns: 0.5 }),
+      sanitizeFrame({ framePadding: 1e9, radius: -40, shadowStrength: 900, columns: 0.5 }),
     ).toEqual({
       ...DEFAULT_FRAME,
       framePadding: 400,
       radius: 0,
       shadowStrength: 100,
-      minColumns: 1,
+      columns: 1,
     });
   });
 

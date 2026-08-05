@@ -26,7 +26,7 @@ The `v: 1` field looks like protection and is not: `decodeWorkspace` returns `nu
 
 Two concrete pressures, both real and both already happening:
 
-- **`FrameSettings` has no external anchor.** `minColumns` presupposes minimum-width-in-columns as the sizing strategy; `shadowStrength: 0-100` encodes one particular scaling of offset, blur and opacity together; `showChrome: boolean` presupposes exactly one window style. Every one of those is a design decision that could reasonably change, and each is frozen the moment a link exists.
+- **`FrameSettings` has no external anchor.** `minColumns` presupposed minimum-width-in-columns as the sizing strategy — and it has since stopped being one: the block is a fixed column count that long lines wrap to, and the field is now `columns`. `shadowStrength: 0-100` encodes one particular scaling of offset, blur and opacity together; `showChrome: boolean` presupposes exactly one window style. Every one of those is a design decision that could reasonably change, and each is frozen the moment a link exists.
 - **Backdrop ids already changed meaning.** [backdrop.ts](../src/export/backdrop.ts) made backdrops adapt to the theme, so `bg: "ember"` renders differently than it did the same afternoon. The id survived; the picture did not. That is the whole failure mode in miniature, and it landed within hours of the links going live.
 
 ## What is genuinely stable, and what is not
@@ -43,16 +43,16 @@ So the risk is encoding risk rather than model risk, which is also why it is tra
 
 Option 1 below is built. `WireWorkspaceV1` is made of strings, numbers and booleans and references no editor type; `toWire`/`fromWire` are the only place the two vocabularies meet. Content travels as **ANSI**, because that is the one part of this Boron did not invent — ECMA-48 cannot drift without terminals drifting, and the invariant that every document is expressible in it is now enforced rather than hoped for.
 
-The wire names are deliberately not the internal ones: `padding` not `framePadding`, `titleBar` not `showChrome`, `shadow` not `shadowStrength`, `columns` not `minColumns` — because "at least this many columns wide" is a terminal idea while a minimum-width sizing strategy is ours to change. A test asserts none of the internal names leak into a payload.
+The wire names are deliberately not the internal ones: `padding` not `framePadding`, `titleBar` not `showChrome`, `shadow` not `shadowStrength`, and `columns` — a width in columns is a terminal idea, while whatever the app does with it is ours to change. That last one has already earned its keep: the internal field was `minColumns`, a floor under a block that never wrapped, and when the block became a real fixed width the wire field did not have to move. A test asserts none of the internal names leak into a payload.
 
-Two lossiness bugs that ANSI-as-a-format would otherwise have had, both fixed and both pinned by a test: `parseAnsi` gained a `trimTrailing` option, because trailing spaces feed `layout.widest` and dropping them narrows the block; and the content is serialized from raw marks rather than through the `$`-prompt heuristic, which would otherwise freeze one reading of the document.
+Two lossiness bugs that ANSI-as-a-format would otherwise have had, both fixed and both pinned by a test: `parseAnsi` gained a `trimTrailing` option, because trailing spaces take up cells and dropping them moves where a long line wraps; and the content is serialized from raw marks rather than through the `$`-prompt heuristic, which would otherwise freeze one reading of the document.
 
 What is still **not** built: the base64/URL layer on top. That is now a small wrapper, and it is a separate decision.
 
 ## Options that were considered
 
 1. **An explicit frozen wire schema.** `WireDocument`/`WireFrame` types that deliberately never reference `TerminalDocument` or `FrameSettings`, plus `toWire`/`fromWire`. The internal model then moves freely behind the seam. **Chosen.**
-2. **ANSI as the content format.** The project's own thesis is that every document is expressible as escape codes, and that is now enforced rather than hoped for. ANSI is externally standardized and human-inspectable, so it is the natural candidate — but note it is *not* quite lossless: `parseAnsi` trims trailing plain spaces and expands tabs, and trailing spaces feed `layout.widest`, so a round trip can narrow the block. Would need either a raw-marks serializer (today's `toAnsi` bakes the prompt heuristic into explicit marks) or acceptance of that edge.
+2. **ANSI as the content format.** The project's own thesis is that every document is expressible as escape codes, and that is now enforced rather than hoped for. ANSI is externally standardized and human-inspectable, so it is the natural candidate — but note it is *not* quite lossless: `parseAnsi` trims trailing plain spaces and expands tabs, and trailing spaces take up cells, so a round trip can move where a long line wraps. Would need either a raw-marks serializer (today's `toAnsi` bakes the prompt heuristic into explicit marks) or acceptance of that edge.
 3. **Ship as-is and keep every old decoder forever.** Cheapest today. The catch is that an old decoder still has to produce a *current* workspace, so the translation layer of option 1 gets written anyway — just later, against a model that has moved, with links already in the wild.
 
 ## Whatever ships, back compatibility has to be mechanical

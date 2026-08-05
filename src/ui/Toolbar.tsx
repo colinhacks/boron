@@ -2,7 +2,7 @@ import { useSlate } from "slate-react";
 import { colorToCss } from "../core/style.ts";
 import type { Theme } from "../core/themes.ts";
 import { MODIFIER_KEYS, NAMED_COLORS, type Color, type ModifierKey, type NamedColor } from "../core/types.ts";
-import { activeMarks, clearFormatting, setColor, toggleModifier } from "../editor/marks.ts";
+import { activeMarks, setColor, toggleModifier } from "../editor/marks.ts";
 
 /**
  * Every control is exactly one SGR code — that correspondence is the only
@@ -144,18 +144,10 @@ export function Toolbar({ theme }: { theme: Theme }) {
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => toggleModifier(editor, key)}
               >
-                {modifier.label}
+                <span className="chip__label">{modifier.label}</span>
               </button>
             );
           })}
-          <button
-            type="button"
-            className="chip chip--ghost"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => clearFormatting(editor)}
-          >
-            Clear
-          </button>
         </div>
       </div>
     </div>

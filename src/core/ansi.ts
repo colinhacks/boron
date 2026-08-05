@@ -243,9 +243,10 @@ export interface ParseOptions {
    * Drop trailing runs of plain spaces, which is what a paste wants — a terminal
    * pads its rows out to the window and none of it is content.
    *
-   * A share link wants the opposite. Trailing spaces feed `layout.widest`, so
-   * dropping them narrows the block, and a format that quietly changes the
-   * picture is not a format you can freeze. Defaults to trimming.
+   * A share link wants the opposite. Trailing spaces occupy cells like anything
+   * else, so dropping them moves where a long line wraps, and a format that
+   * quietly changes the picture is not a format you can freeze. Defaults to
+   * trimming.
    */
   trimTrailing?: boolean;
 }

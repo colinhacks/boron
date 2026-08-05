@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { THEMES, type Theme } from "../core/themes.ts";
 import { BACKGROUNDS, TRANSPARENT_ID, backgroundCss, type Background } from "../export/background.ts";
 import { themedBackground } from "../export/backdrop.ts";
-import { MAX_TITLE_LENGTH, type FrameSettings } from "../export/layout.ts";
+import { MAX_COLUMNS, MAX_TITLE_LENGTH, MIN_COLUMNS, type FrameSettings } from "../export/layout.ts";
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -188,12 +188,12 @@ export function Sidebar({
           onChange={(framePadding) => onFrameChange({ framePadding })}
         />
         <Slider
-          label="Minimum width"
-          value={frame.minColumns}
-          min={20}
-          max={120}
+          label="Width"
+          value={frame.columns}
+          min={MIN_COLUMNS}
+          max={MAX_COLUMNS}
           suffix=" cols"
-          onChange={(minColumns) => onFrameChange({ minColumns })}
+          onChange={(columns) => onFrameChange({ columns })}
         />
       </section>
 

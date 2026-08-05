@@ -26,6 +26,8 @@ import {
 import {
   DEFAULT_FRAME,
   FONT_SIZE,
+  MAX_COLUMNS,
+  MIN_COLUMNS,
   TERMINAL_PADDING,
   computeLayout,
   trafficLights,
@@ -50,12 +52,12 @@ import {
  * Bump this when a default changes that everyone should actually get.
  *
  * The whole workspace is persisted, so a new default — a new sample document, a
- * wider minimum — never reaches anyone who has opened the app before: their
+ * different width — never reaches anyone who has opened the app before: their
  * stored copy wins forever. Changing the key retires the old state and lets the
  * new defaults through. It discards what was saved under the previous key, which
  * is the intent.
  */
-const STORAGE_KEY = "boron.workspace.v2";
+const STORAGE_KEY = "boron.workspace.v3";
 
 /**
  * What was saved last time, field by field. Anything missing or malformed is
@@ -269,9 +271,10 @@ export function App() {
   }, [applyWorkspace]);
 
 
-  // Dragging either edge of the block sets the minimum width. Captured on
-  // pointerdown so the gesture survives the layout changing underneath it.
-  const resizeRef = useRef<{ startX: number; startCols: number; side: "left" | "right"; floor: number; scale: number } | null>(null);
+  // Dragging either edge of the block sets how many columns wide the terminal
+  // is, and the text reflows to it. Captured on pointerdown so the gesture
+  // survives the layout changing underneath it.
+  const resizeRef = useRef<{ startX: number; startCols: number; side: "left" | "right"; scale: number } | null>(null);
   // Which grip is held. Pointer capture keeps the events coming after the
   // pointer leaves the handle, but :hover does not survive the trip, so the lit
   // state is tracked rather than inferred.
@@ -285,17 +288,18 @@ export function App() {
       setDragging(side);
       resizeRef.current = {
         startX: event.clientX,
-        startCols: (layout.terminal.width - TERMINAL_PADDING * 2) / layout.charWidth,
+        // The setting itself, not the measured block: a long title can hold the
+        // block wider than the columns it is showing, and a drag that started
+        // from the width would jump the moment it took over.
+        startCols: frame.columns,
         side,
-        // Never narrower than the longest line — the block does not reflow.
-        floor: Math.ceil(layout.widest / layout.charWidth),
         // Frozen for the gesture: widening the block can shrink the preview to
         // fit, and reading that live would make the drag accelerate under the
         // pointer.
         scale: previewScale,
       };
     },
-    [layout, previewScale],
+    [layout, frame.columns, previewScale],
   );
 
   const moveResize = useCallback(
@@ -305,7 +309,7 @@ export function App() {
       // The block stays centred, so an edge only travels half the width it adds.
       const dx = ((event.clientX - drag.startX) / drag.scale) * (drag.side === "right" ? 1 : -1);
       const next = Math.round(drag.startCols + (dx * 2) / layout.charWidth);
-      setFrame((current) => ({ ...current, minColumns: Math.max(drag.floor, Math.min(200, next)) }));
+      setFrame((current) => ({ ...current, columns: Math.max(MIN_COLUMNS, Math.min(MAX_COLUMNS, next)) }));
     },
     [layout],
   );
@@ -439,6 +443,7 @@ export function App() {
                       halfLeading={layout.halfLeading}
                       padding={TERMINAL_PADDING}
                       width={layout.terminal.width}
+                      wrapWidth={layout.wrapWidth}
                     />
                   </div>
 
@@ -448,7 +453,7 @@ export function App() {
                       className={`resize-handle${dragging === side ? " resize-handle--dragging" : ""}`}
                       role="separator"
                       aria-orientation="vertical"
-                      aria-label="Drag to set the minimum width"
+                      aria-label="Drag to set the width in columns"
                       style={{
                         left:
                           side === "left"

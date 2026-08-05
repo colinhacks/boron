@@ -1,6 +1,7 @@
 import { resolveStyle, type ResolvedStyle } from "../core/style.ts";
 import type { Theme } from "../core/themes.ts";
 import type { RenderLine } from "../core/types.ts";
+import { wrapRenderLines } from "../core/wrap.ts";
 import { FONT_FAMILY } from "./fonts.ts";
 
 /**
@@ -26,6 +27,15 @@ export const LINE_HEIGHT_RATIO = 1.55;
  */
 export const MAX_TITLE_LENGTH = 200;
 
+/**
+ * The width the controls offer, in columns. The sidebar slider and the drag
+ * handles share it so the two cannot disagree about how wide the block may get;
+ * `sanitizeFrame` still clamps wider than this, because bytes arrive from places
+ * neither control wrote.
+ */
+export const MIN_COLUMNS = 20;
+export const MAX_COLUMNS = 200;
+
 export interface FrameSettings {
   /** Space between the terminal and the edge of the image. */
   framePadding: number;
@@ -34,8 +44,8 @@ export interface FrameSettings {
   title: string;
   /** 0-100. Zero casts no shadow at all. */
   shadowStrength: number;
-  /** Keeps a two-word snippet from exporting as a sliver. */
-  minColumns: number;
+  /** How many characters wide the terminal is. Longer lines wrap, as they would. */
+  columns: number;
 }
 
 export const DEFAULT_FRAME: FrameSettings = {
@@ -44,7 +54,7 @@ export const DEFAULT_FRAME: FrameSettings = {
   showChrome: true,
   title: "",
   shadowStrength: 100,
-  minColumns: 80,
+  columns: 80,
 };
 
 export interface LaidSpan {
@@ -73,8 +83,14 @@ export interface Layout {
   lineHeight: number;
   charWidth: number;
   chromeHeight: number;
-  /** Widest line of text, in px. A resize cannot pull the block narrower than this. */
+  /** Widest row of text, in px, after wrapping. Only a wider chrome title can beat it. */
   widest: number;
+  /**
+   * The column count as pixels — where the text wraps, and what the editor's own
+   * box has to be so the browser breaks the same rows this layout did. Not the
+   * same as the terminal's inner width, which a long window title can widen.
+   */
+  wrapWidth: number;
   /** Vertical padding that grows an inline background to a full terminal cell. */
   halfLeading: number;
   terminal: Rect;
@@ -143,7 +159,12 @@ export function computeLayout(
   const { baseline: offset, halfLeading } = leading(fontSize, lineHeight);
   const contentTop = chromeHeight + TERMINAL_PADDING;
 
-  const lines: LaidLine[] = renderLines.map((line, index) => {
+  // Long lines become several rows here, once, so everything downstream — the
+  // height, the exporters' display list — counts rows without knowing that a
+  // logical line can be more than one.
+  const wrapped = wrapRenderLines(renderLines, frame.columns);
+
+  const lines: LaidLine[] = wrapped.map((line, index) => {
     const top = contentTop + index * lineHeight;
     const spans: LaidSpan[] = [];
     let x = TERMINAL_PADDING;
@@ -166,9 +187,14 @@ export function computeLayout(
   // Traffic lights on the left need matching space on the right for the title to stay centered.
   const chromeMinimum = titleWidth > 0 ? titleWidth + chromeHeight * 3 : 0;
 
-  const contentWidth = Math.ceil(
-    Math.max(widest, frame.minColumns * charWidth, chromeMinimum - 2 * TERMINAL_PADDING),
-  );
+  const wrapWidth = Math.ceil(frame.columns * charWidth);
+  // `widest` is in here as a guard rather than as a sizing rule: the rows are cut
+  // to a character count, so the only way one can measure past `wrapWidth` is a
+  // character the bundled font does not cover — an emoji or a box-drawing glyph,
+  // laid out against the reader's system font at whatever advance that has.
+  // Better a wider block than one that clips a glyph in half. The title is the
+  // one thing that widens it on purpose.
+  const contentWidth = Math.ceil(Math.max(widest, wrapWidth, chromeMinimum - 2 * TERMINAL_PADDING));
 
   const terminal: Rect = {
     x: frame.framePadding,
@@ -184,6 +210,7 @@ export function computeLayout(
     charWidth,
     chromeHeight,
     widest,
+    wrapWidth,
     halfLeading,
     terminal,
     width: terminal.width + frame.framePadding * 2,

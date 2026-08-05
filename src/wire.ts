@@ -54,9 +54,11 @@ export interface WireWorkspaceV1 {
 /**
  * Deliberately not `FrameSettings`. The names here are the ones being frozen, and
  * they describe what a reader sees rather than how this app happens to compute
- * it — `columns` rather than `minColumns`, because "at least this many columns
- * wide" is a terminal idea, while a minimum-width sizing strategy is ours to
- * change.
+ * it — `columns`, because a width in columns is a terminal idea, while whatever
+ * this app does with it is ours to change. It has already changed once: the
+ * field was written when columns were only a floor under a block that never
+ * wrapped, and it survived the move to a real width unedited, which is the whole
+ * argument for naming a wire field after the reader's idea of it.
  */
 export interface WireFrameV1 {
   /** Space between the block and the edge of the image, in px. */
@@ -68,7 +70,7 @@ export interface WireFrameV1 {
   title?: string;
   /** Shadow strength, 0-100. */
   shadow?: number;
-  /** Narrowest the block may be, in terminal columns. */
+  /** How many columns wide the terminal is. Longer lines wrap to it. */
   columns?: number;
 }
 
@@ -102,7 +104,7 @@ export function toWire(workspace: Workspace): WireWorkspaceV1 {
       titleBar: workspace.frame.showChrome,
       title: workspace.frame.title,
       shadow: workspace.frame.shadowStrength,
-      columns: workspace.frame.minColumns,
+      columns: workspace.frame.columns,
     },
   };
 }
@@ -123,7 +125,8 @@ export function fromWire(input: unknown): Workspace | null {
   if (typeof wire.content !== "string") return null;
 
   // Trailing spaces are content to a share link even though they are noise to a
-  // paste: they feed `layout.widest`, so trimming them narrows the block.
+  // paste: they take up cells, so trimming them moves where a long line wraps
+  // and unpaints any that carried a background.
   const document = sanitizeDocument(
     parsedLinesToDocument(parseAnsi(wire.content, { trimTrailing: false })),
   );
@@ -140,7 +143,7 @@ export function fromWire(input: unknown): Workspace | null {
       showChrome: frame.titleBar ?? DEFAULT_FRAME.showChrome,
       title: frame.title ?? DEFAULT_FRAME.title,
       shadowStrength: frame.shadow ?? DEFAULT_FRAME.shadowStrength,
-      minColumns: frame.columns ?? DEFAULT_FRAME.minColumns,
+      columns: frame.columns ?? DEFAULT_FRAME.columns,
     }),
   };
 }

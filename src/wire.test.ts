@@ -14,7 +14,7 @@ const frame = {
   showChrome: true,
   title: "zsh — boron",
   shadowStrength: 30,
-  minColumns: 64,
+  columns: 64,
 };
 
 function workspaceOf(document: LineElement[]): Workspace {
@@ -66,7 +66,7 @@ describe("toWire / fromWire", () => {
     ]);
   });
 
-  /** Trailing spaces feed `layout.widest`, so losing them narrows the block. */
+  /** Trailing spaces take up cells, so losing them moves where a long line wraps. */
   it("keeps trailing spaces, which a paste would drop", () => {
     const workspace = workspaceOf([{ type: "line", children: [{ text: "padded     " }] }]);
     expect(fromWire(toWire(workspace))?.document).toEqual(workspace.document);
@@ -80,8 +80,11 @@ describe("toWire / fromWire", () => {
   it("names nothing from the internal model in the payload", () => {
     const wire = toWire(workspaceOf([{ type: "line", children: [{ text: "x" }] }]));
     const keys = [...Object.keys(wire), ...Object.keys(wire.frame ?? {})];
-    // The internal names are the ones that must never appear on the wire.
-    for (const leaked of ["framePadding", "showChrome", "shadowStrength", "minColumns", "children", "themeId", "backgroundId"]) {
+    // The internal names are the ones that must never appear on the wire. The
+    // width is not among them: `columns` is what the reader calls it and what
+    // the app now calls it too, which is the wire name being right rather than
+    // the guard being missing.
+    for (const leaked of ["framePadding", "showChrome", "shadowStrength", "children", "themeId", "backgroundId"]) {
       expect(keys, `${leaked} leaked into the wire format`).not.toContain(leaked);
     }
   });
@@ -119,7 +122,7 @@ describe("fromWire defaults and rejection", () => {
       content: "x",
       frame: { padding: 1e9, radius: -40, shadow: 900, columns: 0.5 },
     });
-    expect(restored?.frame).toMatchObject({ framePadding: 400, radius: 0, shadowStrength: 100, minColumns: 1 });
+    expect(restored?.frame).toMatchObject({ framePadding: 400, radius: 0, shadowStrength: 100, columns: 1 });
   });
 });
 
@@ -196,7 +199,7 @@ const CORPUS: readonly { name: string; payload: string; expect: Partial<Workspac
         showChrome: true,
         title: "zsh",
         shadowStrength: 50,
-        minColumns: 40,
+        columns: 40,
       },
     },
   },

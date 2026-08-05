@@ -36,6 +36,7 @@ function layoutWith(spans: LaidSpan[], chromeHeight = 40): Layout {
     charWidth: 9,
     chromeHeight,
     widest: 200,
+    wrapWidth: 404,
     halfLeading: 4,
     terminal: { x: 48, y: 48, width: 500, height: 200 },
     width: 596,
