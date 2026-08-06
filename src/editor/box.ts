@@ -312,14 +312,25 @@ export function boxMarks(editor: Editor, ranges: readonly Range[]): Marks {
   let common: Marks | null = null;
 
   for (const range of ranges) {
-    for (const [node] of Editor.nodes(editor, { at: range, match: Text.isText, voids: true })) {
-      const { text: _text, ...marks } = node;
-      if (common === null) {
-        common = { ...marks } as Marks;
-        continue;
-      }
-      for (const key of MARK_KEYS) {
-        if (common[key] !== (marks as Marks)[key]) delete common[key];
+    // `Editor.fragment` cuts at the range's own edges. `Editor.nodes` does not:
+    // it yields every node the range *touches*, which is two too many. A box
+    // over the middle of a line picks up the unstyled runs either side of it and
+    // intersects them in, so a colour that had just been applied to every
+    // covered cell reported as not applied at all — the toolbar showed nothing
+    // selected for a change the user had watched happen.
+    for (const line of Editor.fragment(editor, range)) {
+      for (const child of (line as LineElement).children) {
+        // A row the box only overhangs slices to nothing. It is not part of what
+        // the box covers, so it gets no say in what the box carries.
+        if (child.text.length === 0) continue;
+        const { text: _text, ...marks } = child;
+        if (common === null) {
+          common = { ...marks } as Marks;
+          continue;
+        }
+        for (const key of MARK_KEYS) {
+          if (common[key] !== (marks as Marks)[key]) delete common[key];
+        }
       }
     }
   }

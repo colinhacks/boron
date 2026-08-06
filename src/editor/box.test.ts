@@ -4,6 +4,7 @@ import { documentToRenderLines, type LineElement } from "../core/document.ts";
 import { wrapRenderLines } from "../core/wrap.ts";
 import {
   boxFragment,
+  boxMarks,
   boxRanges,
   boxSpans,
   boxText,
@@ -268,6 +269,41 @@ describe("commands over a box", () => {
         ["FGHIJ", {}],
       ],
     ]);
+  });
+
+  /**
+   * The read side of "leaves a short line untouched". Applying skips a row the
+   * box overhangs, because a collapsed range has nothing to set — but reading
+   * used to walk into it anyway and fold that row's own marks into the
+   * intersection. The toolbar then showed nothing selected for a change it had
+   * just made, which reads as the click having failed.
+   */
+  it("ignores a row the box only overhangs when reporting marks", () => {
+    const lines = doc("a long line", "hi", "another one");
+    const editor = editorWith(lines);
+    const ranges = boxRanges(lines, 80, box(0, 2, 7, 11));
+    setBoxColor(editor, ranges, "fg", "red");
+
+    const after = boxRanges(editor.children as LineElement[], 80, box(0, 2, 7, 11));
+    expect(boxMarks(editor, after)).toEqual({ fg: "red" });
+  });
+
+  it("still intersects across the rows the box actually covers", () => {
+    const lines = doc("aaaaaaaaaaa", "bbbbbbbbbbb");
+    const editor = editorWith(lines);
+    const ranges = boxRanges(lines, 80, box(0, 1, 2, 5));
+    setBoxColor(editor, ranges, "fg", "red");
+    // Only the first row gets bold, so the two rows no longer agree on it.
+    toggleBoxModifier(editor, boxRanges(editor.children as LineElement[], 80, box(0, 0, 2, 5)), "bold");
+
+    const after = boxRanges(editor.children as LineElement[], 80, box(0, 1, 2, 5));
+    expect(boxMarks(editor, after)).toEqual({ fg: "red" });
+  });
+
+  it("reports nothing for a box that covers no text at all", () => {
+    const lines = doc("hi", "yo");
+    const editor = editorWith(lines);
+    expect(boxMarks(editor, boxRanges(lines, 80, box(0, 1, 20, 24)))).toEqual({});
   });
 
   it("leaves a short line untouched when the box overhangs it", () => {
