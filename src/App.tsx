@@ -5,6 +5,7 @@ import { Slate, withReact } from "slate-react";
 import { documentToRenderLines, type LineElement } from "./core/document.ts";
 import { toAnsi, toChalkSource, toPlainText } from "./core/serialize.ts";
 import { DEFAULT_THEME, themeById } from "./core/themes.ts";
+import { BoxSelectionProvider } from "./editor/BoxSelection.tsx";
 import { TerminalSurface } from "./editor/TerminalEditor.tsx";
 import { withTerminal } from "./editor/withTerminal.ts";
 import {
@@ -93,6 +94,26 @@ function loadPersisted(): Partial<Workspace> {
  * legible: six pixels of a fifteen-pixel face.
  */
 const MIN_PREVIEW_SCALE = 6 / FONT_SIZE;
+
+/**
+ * What to call the box-selection modifier on this machine.
+ *
+ * A hidden gesture nobody is told about is a gesture nobody uses, and this
+ * caption is the only place the app says it.
+ *
+ * `userAgentData` is asked first because `navigator.platform` is deprecated,
+ * but it is joined rather than used as a fallback: Chrome answers
+ * `userAgentData.platform` with an **empty string** on macOS unless the hint is
+ * requested, and `??` treats that as a present value — which silently told
+ * every Mac to press "Alt". Measured in this browser, not assumed.
+ */
+const ALT_LABEL = /mac/i.test(
+  [(navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform, navigator.platform]
+    .filter(Boolean)
+    .join(" "),
+)
+  ? "⌥"
+  : "Alt";
 
 type CopyMode = "image" | "ansi" | "chalk" | "text";
 
@@ -384,6 +405,12 @@ export function App() {
       </header>
 
       <Slate editor={editor} initialValue={initialValue} onChange={handleChange}>
+        <BoxSelectionProvider
+          columns={frame.columns}
+          charWidth={layout?.charWidth ?? 0}
+          lineHeight={layout?.lineHeight ?? 0}
+          padding={TERMINAL_PADDING}
+        >
         <main className="app-main">
           <div className="workspace">
             <FloatingToolbar theme={theme} />
@@ -494,7 +521,9 @@ export function App() {
               )}
               </div>
               {layout ? (
-                <p className="stage__caption">Edit above or try copy/pasting from your terminal.</p>
+                <p className="stage__caption">
+                  Edit above, paste from your terminal, or {ALT_LABEL}-drag to select a column.
+                </p>
               ) : null}
             </div>
 
@@ -510,6 +539,7 @@ export function App() {
             onFrameChange={handleFrameChange}
           />
         </main>
+        </BoxSelectionProvider>
       </Slate>
 
       <div className={`toast${toast ? " toast--visible" : ""}`} role="status" aria-live="polite">

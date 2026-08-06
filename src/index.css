@@ -437,10 +437,19 @@ input {
  *
  * The alpha is the lever for that read-through and nothing else — how visible
  * the highlight is comes from `--boron-selection` itself.
+ *
+ * Stated once as a variable because there are two ways to select in here — drag
+ * a run of text, or alt-drag a rectangle — and only one of them can use
+ * `::selection`. A box is painted by the decoration pass as a background on the
+ * leaf, so the two would drift apart the moment either was tuned alone.
  */
+.terminal-editable {
+  --boron-selection-fill: color-mix(in srgb, var(--boron-selection) 45%, transparent);
+}
+
 .terminal-editable::selection,
 .terminal-editable *::selection {
-  background-color: color-mix(in srgb, var(--boron-selection) 45%, transparent);
+  background-color: var(--boron-selection-fill);
 }
 
 /*

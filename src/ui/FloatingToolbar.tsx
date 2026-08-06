@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { Editor, Range } from "slate";
 import { ReactEditor, useSlate } from "slate-react";
 import type { Theme } from "../core/themes.ts";
+import { boxRect } from "../editor/box.ts";
+import { useBoxSelection } from "../editor/BoxSelection.tsx";
 import { Toolbar } from "./Toolbar.tsx";
 
 const GAP = 10;
@@ -16,12 +18,24 @@ const GAP = 10;
  */
 export function FloatingToolbar({ theme }: { theme: Theme }) {
   const editor = useSlate();
+  const { box, spans, measureGrid } = useBoxSelection();
   const ref = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(false);
 
-  const sync = useCallback(() => {
-    const element = ref.current;
-    if (!element) return;
+  /**
+   * Where the highlight is, whichever kind it is — or `null` for "nothing worth
+   * opening the bar over".
+   *
+   * A box is checked first and short-circuits the rest: it suppresses the native
+   * selection while it is up, so every test below it would fail on a rectangle
+   * that is plainly there on screen.
+   */
+  const anchorRect = useCallback((): DOMRect | null => {
+    if (box) {
+      if (spans.length === 0) return null;
+      const grid = measureGrid();
+      return grid ? boxRect(grid, box) : null;
+    }
 
     const { selection } = editor;
     if (
@@ -30,8 +44,7 @@ export function FloatingToolbar({ theme }: { theme: Theme }) {
       !ReactEditor.isFocused(editor) ||
       Editor.string(editor, selection) === ""
     ) {
-      setVisible(false);
-      return;
+      return null;
     }
 
     // The model can outlive what's actually highlighted — Slate keeps its last
@@ -39,16 +52,22 @@ export function FloatingToolbar({ theme }: { theme: Theme }) {
     // telling it. Trust the DOM for "is anything still selected", so the toolbar
     // never hangs around over nothing.
     const domSelection = window.getSelection();
-    if (!domSelection || domSelection.rangeCount === 0 || domSelection.isCollapsed) {
-      setVisible(false);
-      return;
-    }
+    if (!domSelection || domSelection.rangeCount === 0 || domSelection.isCollapsed) return null;
 
-    let rect: DOMRect;
     try {
-      rect = ReactEditor.toDOMRange(editor, selection).getBoundingClientRect();
+      return ReactEditor.toDOMRange(editor, selection).getBoundingClientRect();
     } catch {
       // The DOM can lag the model for a tick after a paste or an undo.
+      return null;
+    }
+  }, [editor, box, spans, measureGrid]);
+
+  const sync = useCallback(() => {
+    const element = ref.current;
+    if (!element) return;
+
+    const rect = anchorRect();
+    if (!rect) {
       setVisible(false);
       return;
     }
@@ -64,7 +83,7 @@ export function FloatingToolbar({ theme }: { theme: Theme }) {
     const top = above > GAP ? above : rect.bottom + GAP;
     element.style.left = `${left + window.scrollX}px`;
     element.style.top = `${top + window.scrollY}px`;
-  }, [editor]);
+  }, [anchorRect]);
 
   // Every editor change — which is what keeps the toolbar over the selection.
   useEffect(sync);

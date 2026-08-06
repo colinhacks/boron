@@ -6,9 +6,10 @@ import type { SpanRole } from "../core/types.ts";
 
 export type BoronEditor = BaseEditor & ReactEditor & HistoryEditor;
 
-/** The decoration the `$`-prompt pass attaches to a range. */
+/** What the decoration pass attaches to a range: its `$`-prompt role, and whether a box covers it. */
 export interface RoleRange extends BaseRange {
   boronRole?: SpanRole;
+  boronBox?: boolean;
 }
 
 declare module "slate" {

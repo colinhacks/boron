@@ -1,8 +1,7 @@
-import { useSlate } from "slate-react";
 import { colorToCss } from "../core/style.ts";
 import type { Theme } from "../core/themes.ts";
 import { MODIFIER_KEYS, NAMED_COLORS, type Color, type ModifierKey, type NamedColor } from "../core/types.ts";
-import { activeMarks, setColor, toggleModifier } from "../editor/marks.ts";
+import { useFormatting } from "../editor/useFormatting.ts";
 
 /**
  * Every control is exactly one SGR code — that correspondence is the only
@@ -108,8 +107,8 @@ function SwatchRow({ label, markKey, active, theme, onPick }: SwatchRowProps) {
 }
 
 export function Toolbar({ theme }: { theme: Theme }) {
-  const editor = useSlate();
-  const marks = activeMarks(editor);
+  // Bound to whichever selection is live — a run of text, or a rectangle.
+  const { marks, setColor, toggleModifier } = useFormatting();
 
   return (
     <div className="toolbar" role="toolbar" aria-label="Text formatting">
@@ -118,14 +117,14 @@ export function Toolbar({ theme }: { theme: Theme }) {
         markKey="fg"
         active={marks.fg}
         theme={theme}
-        onPick={(color) => setColor(editor, "fg", color)}
+        onPick={(color) => setColor("fg", color)}
       />
       <SwatchRow
         label="Fill"
         markKey="bg"
         active={marks.bg}
         theme={theme}
-        onPick={(color) => setColor(editor, "bg", color)}
+        onPick={(color) => setColor("bg", color)}
       />
       <div className="swatch-row">
         <span className="swatch-row__label">Style</span>
@@ -139,7 +138,7 @@ export function Toolbar({ theme }: { theme: Theme }) {
                 className={`chip${marks[key] === true ? " chip--active" : ""} chip--${key}`}
                 title={`chalk.${key} · SGR ${modifier.sgr}`}
                 aria-pressed={marks[key] === true}
-                  onClick={() => toggleModifier(editor, key)}
+                  onClick={() => toggleModifier(key)}
               >
                 <span className="chip__label">{modifier.label}</span>
               </button>
