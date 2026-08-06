@@ -254,9 +254,22 @@ input {
     border-color 100ms ease;
 }
 
-.chip:hover {
+/*
+ * Hover must not outrank the selected state. `.chip:hover` is (0,2,0) and
+ * `.chip--active` is (0,1,0), so the dimmer hover border won outright and
+ * clicking a pill looked like nothing had happened until the pointer moved off
+ * it. Scoping hover to the unselected chips is what fixes it: the two now
+ * describe disjoint sets rather than racing on specificity.
+ */
+.chip:not(.chip--active):hover {
   border-color: var(--border-strong);
   color: var(--text);
+}
+
+/* A selected pill still answers the pointer — through the fill, which no state
+   of its own is using, rather than through the border, which is the state. */
+.chip--active:hover {
+  background: color-mix(in srgb, var(--text) 9%, var(--bg-elev-2));
 }
 
 /*
