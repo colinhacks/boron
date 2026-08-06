@@ -313,15 +313,16 @@ input {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
   padding: 24px;
 }
 
 /*
  * The block's whole world: it may be exactly this big and no bigger, which is
  * what App.tsx measures to work out how far to zoom the preview out. Splitting
- * it off the stage is what keeps that measurement honest — the padding and the
- * caption are outside this box rather than numbers to subtract back off it.
+ * it off the stage is what keeps that measurement honest — the stage's padding
+ * is outside this box rather than a number to subtract back off it, and the
+ * caption, which hangs under the block itself, is out of flow and so costs the
+ * measurement nothing either.
  *
  * `safe center` rather than `center` because the two part company precisely when
  * it matters. A centred flex item that outgrows its container overflows *both*
@@ -345,14 +346,32 @@ input {
   color: var(--text-faint);
 }
 
+/*
+ * Directly under the block, not at the foot of the stage. It hangs off
+ * `.frame-fit`, whose box is the scaled block exactly, so it follows the block
+ * up and down as the preview zooms instead of sitting a windowful below it.
+ *
+ * Out of flow on purpose: the caption must not count against the fit box above,
+ * which is measured to decide how far the preview zooms out. In flow it would be
+ * a number to subtract back off — the thing that box exists to avoid.
+ *
+ * Centred on the block rather than stretched across it, and `nowrap`, because
+ * the block can be twenty columns wide and the sentence would wrap to four lines
+ * inside it.
+ */
 .stage__caption {
-  margin: 0;
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 16px 0 0;
   color: var(--text-faint);
   font-size: 12px;
-  text-align: center;
+  white-space: nowrap;
 }
 
 .frame-fit {
+  position: relative;
   flex: none;
 }
 
@@ -658,6 +677,27 @@ input {
     #8e4ec6,
     #e5484d
   );
+}
+
+/*
+ * Legible on the hue wheel and on any colour the reader goes on to pick, which
+ * is why the halo is a stroke rather than a shadow: `paint-order: stroke` draws
+ * it under the fill, so it reads as an outline outside the glyph instead of
+ * thickening it. White on a dark outline survives `#ffff00` and `#000000` alike.
+ *
+ * `pointer-events: none` so the click falls through to the input beneath — the
+ * whole swatch is the control, and the glyph is only its face.
+ */
+.background-swatch__dropper {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  fill: #fff;
+  stroke: rgba(0, 0, 0, 0.5);
+  stroke-width: 2.6;
+  stroke-linejoin: round;
+  paint-order: stroke;
+  pointer-events: none;
 }
 
 /*

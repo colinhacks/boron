@@ -12,6 +12,29 @@ import {
 import { themedBackground } from "../export/backdrop.ts";
 import { MAX_COLUMNS, MAX_TITLE_LENGTH, MIN_COLUMNS, type FrameSettings } from "../export/layout.ts";
 
+/**
+ * The eyedropper that marks the one swatch you *pick* rather than choose.
+ *
+ * Without it the swatch is just a tenth colour in a grid of nine, and a hue
+ * wheel is not self-explanatory — it reads as one more backdrop that happens to
+ * be rainbow-coloured. The glyph is the part that says "this one opens a picker".
+ *
+ * White with a dark halo, rather than a colour picked to suit the swatch: it has
+ * to stay legible on the wheel *and* on whatever the reader goes on to choose,
+ * which includes both `#ffff00` and `#000000`. The halo is a stroke drawn under
+ * the fill (`paint-order` in the stylesheet), so it shows only outside the shape
+ * and never thickens it.
+ */
+function Dropper() {
+  return (
+    <svg className="background-swatch__dropper" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      {/* Bulb and barrel, on the diagonal, then the shaft down to the tip. */}
+      <path d="M20.5 3.5a2.6 2.6 0 0 0-3.7 0l-2.4 2.4-1-1-2.2 2.2 6.7 6.7 2.2-2.2-1-1 2.4-2.4a2.6 2.6 0 0 0 0-3.7z" />
+      <path d="M11.1 9.9 4 17l-1 4 4-1 7.1-7.1z" />
+    </svg>
+  );
+}
+
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="field">
@@ -164,6 +187,7 @@ export function Sidebar({
             // what says "any colour" rather than naming one.
             style={fill ? { background: fill } : undefined}
           >
+            <Dropper />
             <input
               type="color"
               className="background-swatch__picker"

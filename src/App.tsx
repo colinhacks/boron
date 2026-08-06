@@ -510,16 +510,18 @@ export function App() {
                     />
                   ))}
                 </div>
+                {/* Hung off the block's own box so it sits under the block
+                    wherever that ends up, rather than at the foot of a stage
+                    that is as tall as the window. It is positioned out of flow,
+                    which is what keeps it off the measurement above. */}
+                <p className="stage__caption">
+                  Edit above, paste from your terminal, or {ALT_LABEL}-drag to select a column.
+                </p>
                 </div>
               ) : (
                 <p className="stage__loading">Loading font…</p>
               )}
               </div>
-              {layout ? (
-                <p className="stage__caption">
-                  Edit above, paste from your terminal, or {ALT_LABEL}-drag to select a column.
-                </p>
-              ) : null}
             </div>
 
             <Credit />
