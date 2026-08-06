@@ -3,7 +3,7 @@ import type { LineElement } from "./core/document.ts";
 import { DEFAULT_THEME } from "./core/themes.ts";
 import { DEFAULT_BACKGROUND_ID, TRANSPARENT_ID } from "./export/background.ts";
 import { DEFAULT_FRAME } from "./export/layout.ts";
-import { fromWire, toWire, type WireWorkspaceV1 } from "./wire.ts";
+import { PARAM, fromSearchParams, fromWire, toSearchParams, toWire, type WireWorkspaceV1 } from "./wire.ts";
 import type { Workspace } from "./workspace.ts";
 
 const E = "\u001b";
@@ -246,5 +246,80 @@ describe("the frozen v1 corpus", () => {
       const once = fromWire(JSON.parse(entry.payload) as WireWorkspaceV1)!;
       expect(fromWire(toWire(once)), entry.name).toEqual(once);
     }
+  });
+});
+
+/* ------------------------------------------------------ as query params -- */
+
+describe("toSearchParams / fromSearchParams", () => {
+  const wireOf = (document: LineElement[]) => toWire(workspaceOf(document));
+
+  it("writes one named parameter per setting", () => {
+    const params = toSearchParams(wireOf([{ type: "line", children: [{ text: "x" }] }]), "uXXXX");
+    expect([...params.keys()].sort()).toEqual(Object.values(PARAM).slice().sort());
+    expect(params.get("theme")).toBe("dracula");
+    expect(params.get("backdrop")).toBe("ember");
+    expect(params.get("padding")).toBe("96");
+    expect(params.get("columns")).toBe("64");
+    expect(params.get("titleBar")).toBe("1");
+    expect(params.get("content")).toBe("uXXXX");
+  });
+
+  /**
+   * The same rule the blob had, and the same reason: a link is a promise about
+   * an image, and one that repaints because a default moved has broken it. A
+   * query string makes omitting them tempting in a way a blob did not.
+   */
+  it("writes settings that happen to equal a default, rather than omitting them", () => {
+    const params = toSearchParams(toWire({ ...workspaceOf([{ type: "line", children: [{ text: "x" }] }]), frame: DEFAULT_FRAME }), "u");
+    expect(params.get("padding")).toBe(String(DEFAULT_FRAME.framePadding));
+    expect(params.get("shadow")).toBe(String(DEFAULT_FRAME.shadowStrength));
+    expect(params.get("columns")).toBe(String(DEFAULT_FRAME.columns));
+  });
+
+  it("round-trips every setting through a query string", () => {
+    const wire = wireOf([{ type: "line", children: [{ text: "x" }] }]);
+    const back = fromSearchParams(toSearchParams(wire, "ignored"), wire.content);
+    expect(fromWire(back)).toEqual(fromWire(wire));
+  });
+
+  it("defaults anything the link leaves out", () => {
+    const restored = fromWire(fromSearchParams(new URLSearchParams("theme=nord"), "hello"));
+    expect(restored?.themeId).toBe("nord");
+    expect(restored?.backgroundId).toBe(DEFAULT_BACKGROUND_ID);
+    expect(restored?.frame).toEqual(DEFAULT_FRAME);
+  });
+
+  /** Adding a setting must never break a link written before it existed. */
+  it("ignores a parameter it does not know", () => {
+    const restored = fromWire(fromSearchParams(new URLSearchParams("theme=nord&glow=17&utm_source=x"), "hi"));
+    expect(restored?.themeId).toBe("nord");
+    expect(restored?.frame).toEqual(DEFAULT_FRAME);
+  });
+
+  it("takes a missing version as the first one, and refuses a later one", () => {
+    expect(fromSearchParams(new URLSearchParams("theme=nord"), "x")).not.toBeNull();
+    expect(fromSearchParams(new URLSearchParams("v=1&theme=nord"), "x")).not.toBeNull();
+    expect(fromSearchParams(new URLSearchParams("v=2&theme=nord"), "x")).toBeNull();
+  });
+
+  it("reads a boolean the way anyone would write one by hand", () => {
+    const bar = (raw: string) => fromWire(fromSearchParams(new URLSearchParams(`titleBar=${raw}`), "x"))?.frame.showChrome;
+    expect(bar("1")).toBe(true);
+    expect(bar("true")).toBe(true);
+    expect(bar("0")).toBe(false);
+    expect(bar("false")).toBe(false);
+  });
+
+  it("falls back to the default rather than NaN when a number is nonsense", () => {
+    const restored = fromWire(fromSearchParams(new URLSearchParams("padding=lots&radius=&columns=abc"), "x"));
+    expect(restored?.frame.framePadding).toBe(DEFAULT_FRAME.framePadding);
+    expect(restored?.frame.radius).toBe(DEFAULT_FRAME.radius);
+    expect(restored?.frame.columns).toBe(DEFAULT_FRAME.columns);
+  });
+
+  it("still clamps what a hand-written link asks for", () => {
+    const restored = fromWire(fromSearchParams(new URLSearchParams("padding=1e9&shadow=900&columns=0"), "x"));
+    expect(restored?.frame).toMatchObject({ framePadding: 400, shadowStrength: 100, columns: 1 });
   });
 });

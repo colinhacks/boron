@@ -147,3 +147,95 @@ export function fromWire(input: unknown): Workspace | null {
     }),
   };
 }
+
+/* ----------------------------------------------------------- as a query -- */
+
+/**
+ * The parameter names, which are the part that is frozen.
+ *
+ * A link is one named parameter per setting rather than one sealed blob, and the
+ * reason is the next thing that will read them: a generation endpoint wants the
+ * same vocabulary a share link uses, so `?content=…&theme=…` documents both at
+ * once. It also means a setting can be changed by editing the URL, which is what
+ * anyone will try first.
+ *
+ * Named parameters version themselves better than a blob, too. A reader ignores
+ * a parameter it does not know and defaults one that is missing, so *adding* a
+ * setting never breaks an old link. `v` is kept for the changes that shape alone
+ * cannot express — if `shadow` ever stopped meaning 0-100, the name would stay
+ * the same while the meaning moved, and only a version can catch that.
+ */
+export const PARAM = {
+  version: "v",
+  content: "content",
+  theme: "theme",
+  backdrop: "backdrop",
+  padding: "padding",
+  radius: "radius",
+  titleBar: "titleBar",
+  title: "title",
+  shadow: "shadow",
+  columns: "columns",
+} as const;
+
+/**
+ * Every setting is written, never only the ones that differ from a default. It
+ * is tempting to omit them — the URL would read better — and it is the same
+ * mistake as diffing against defaults inside a blob: the day a default moves,
+ * every link that leaned on it renders a different picture than it promised.
+ *
+ * `content` is the exception to the readability, and deliberately: it is the
+ * only part big enough for compression to matter, so the caller hands in an
+ * already-encoded blob rather than raw escape sequences, which would triple in
+ * length under percent-encoding.
+ */
+export function toSearchParams(wire: WireWorkspaceV1, encodedContent: string): URLSearchParams {
+  const frame = wire.frame ?? {};
+  const params = new URLSearchParams();
+  params.set(PARAM.version, String(wire.version));
+  params.set(PARAM.content, encodedContent);
+  params.set(PARAM.theme, wire.theme ?? "");
+  params.set(PARAM.backdrop, wire.backdrop ?? "");
+  params.set(PARAM.padding, String(frame.padding ?? DEFAULT_FRAME.framePadding));
+  params.set(PARAM.radius, String(frame.radius ?? DEFAULT_FRAME.radius));
+  params.set(PARAM.titleBar, (frame.titleBar ?? DEFAULT_FRAME.showChrome) ? "1" : "0");
+  params.set(PARAM.title, frame.title ?? "");
+  params.set(PARAM.shadow, String(frame.shadow ?? DEFAULT_FRAME.shadowStrength));
+  params.set(PARAM.columns, String(frame.columns ?? DEFAULT_FRAME.columns));
+  return params;
+}
+
+function numberParam(params: URLSearchParams, name: string): number | undefined {
+  const raw = params.get(name);
+  if (raw === null || raw.trim() === "") return undefined;
+  const value = Number(raw);
+  // `sanitizeFrame` clamps; this only decides whether the caller said anything
+  // at all, so nonsense falls through to the default rather than to NaN.
+  return Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * The wire object a query string describes, or `null` when it does not describe
+ * one. `content` is left as the caller passes it in, already decoded.
+ */
+export function fromSearchParams(params: URLSearchParams, decodedContent: string): WireWorkspaceV1 | null {
+  const version = params.get(PARAM.version);
+  // Absent means the first version, so a hand-written link can leave it off.
+  if (version !== null && version !== "1") return null;
+
+  const titleBar = params.get(PARAM.titleBar);
+  return {
+    version: 1,
+    content: decodedContent,
+    ...(params.get(PARAM.theme) ? { theme: params.get(PARAM.theme)! } : {}),
+    ...(params.get(PARAM.backdrop) ? { backdrop: params.get(PARAM.backdrop)! } : {}),
+    frame: {
+      ...(numberParam(params, PARAM.padding) !== undefined ? { padding: numberParam(params, PARAM.padding)! } : {}),
+      ...(numberParam(params, PARAM.radius) !== undefined ? { radius: numberParam(params, PARAM.radius)! } : {}),
+      ...(titleBar !== null && titleBar !== "" ? { titleBar: titleBar !== "0" && titleBar !== "false" } : {}),
+      ...(params.get(PARAM.title) !== null ? { title: params.get(PARAM.title)! } : {}),
+      ...(numberParam(params, PARAM.shadow) !== undefined ? { shadow: numberParam(params, PARAM.shadow)! } : {}),
+      ...(numberParam(params, PARAM.columns) !== undefined ? { columns: numberParam(params, PARAM.columns)! } : {}),
+    },
+  };
+}
