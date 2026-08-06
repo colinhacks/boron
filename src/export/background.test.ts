@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { converter, differenceEuclidean, modeOklab, modeOklch, modeRgb, useMode } from "culori/fn";
 import { THEMES } from "../core/themes.ts";
-import { BACKGROUNDS, backgroundById } from "./background.ts";
+import { BACKGROUNDS, backgroundById, backgroundCss, flatColor, isFillId } from "./background.ts";
 import { themedBackground } from "./backdrop.ts";
 
 useMode(modeRgb);
@@ -30,6 +30,29 @@ describe("the backdrop set", () => {
       "graphite",
       "ink",
     ]);
+  });
+
+  it("reads a colour as a backdrop of its own, without adding one to the set", () => {
+    const fill = backgroundById("#ff6600")!;
+    expect(fill.stops).toEqual(["#ff6600"]);
+    // The picker lists `BACKGROUNDS`, and a fill is picked rather than listed.
+    expect(BACKGROUNDS.some((background) => background.id === fill.id)).toBe(false);
+    expect(isFillId("#ff6600")).toBe(true);
+    expect(isFillId("midnight")).toBe(false);
+    expect(isFillId("none")).toBe(false);
+  });
+
+  /**
+   * A one-stop `linear-gradient()` is not a CSS gradient — the browser drops the
+   * whole declaration rather than the surplus, so the preview would lose its
+   * backdrop while both exporters kept theirs. Three renderers have to agree.
+   */
+  it("writes a fill as a flat colour rather than as a gradient", () => {
+    expect(backgroundCss(backgroundById("#ff6600"))).toBe("#ff6600");
+    expect(flatColor(backgroundById("#ff6600")!)).toBe("#ff6600");
+    expect(backgroundCss(backgroundById("midnight"))).toContain("linear-gradient(");
+    expect(flatColor(backgroundById("midnight")!)).toBeNull();
+    expect(backgroundCss(null)).toBe("transparent");
   });
 
   it("spreads the coloured backdrops around the hue wheel", () => {

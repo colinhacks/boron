@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ResolvedStyle } from "../core/style.ts";
 import { themeById } from "../core/themes.ts";
-import { BACKGROUNDS } from "./background.ts";
+import { BACKGROUNDS, backgroundById } from "./background.ts";
 import { DEFAULT_FRAME, type FrameSettings, type LaidSpan, type Layout } from "./layout.ts";
 import { buildOps, isGradient, type Op } from "./paint.ts";
 import type { Scene } from "./scene.ts";
@@ -142,5 +142,15 @@ describe("buildOps", () => {
       expect(paint.stops).toEqual(BACKGROUNDS[0]!.stops);
       expect(Number.isFinite(paint.x0 + paint.y0 + paint.x1 + paint.y1)).toBe(true);
     }
+  });
+
+  /**
+   * A picked colour is one colour. Carrying it as a ramp would have the SVG emit
+   * a `<linearGradient>` with a single stop and a gradient line computed off an
+   * angle nobody set — geometry standing in for `fill="#ff6600"`.
+   */
+  it("carries a fill as a flat colour rather than as a one-stop ramp", () => {
+    const ops = buildOps(scene([span("x", 24)], {}, backgroundById("#ff6600")));
+    expect(ops[0]).toMatchObject({ op: "fill", x: 0, y: 0, width: 596, height: 296, paint: "#ff6600" });
   });
 });

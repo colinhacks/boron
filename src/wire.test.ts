@@ -77,6 +77,22 @@ describe("toWire / fromWire", () => {
     expect(fromWire(toWire(workspace))?.backgroundId).toBe(TRANSPARENT_ID);
   });
 
+  /**
+   * A fill rides the field the backdrop ids already ride, which is why it is not
+   * a v2 — but a `#` is the one character a query string will not carry as
+   * itself, so the whole trip is pinned rather than just `fromWire`.
+   */
+  it("carries a fill colour through the wire and through a query string", () => {
+    const workspace = { ...workspaceOf([{ type: "line", children: [{ text: "x" }] }]), backgroundId: "#ff6600" };
+    const wire = toWire(workspace);
+    expect(wire.backdrop).toBe("#ff6600");
+    expect(fromWire(wire)?.backgroundId).toBe("#ff6600");
+
+    const params = new URLSearchParams(toSearchParams(wire, "uXXXX").toString());
+    expect(params.get(PARAM.backdrop)).toBe("#ff6600");
+    expect(fromWire(fromSearchParams(params, wire.content))?.backgroundId).toBe("#ff6600");
+  });
+
   it("names nothing from the internal model in the payload", () => {
     const wire = toWire(workspaceOf([{ type: "line", children: [{ text: "x" }] }]));
     const keys = [...Object.keys(wire), ...Object.keys(wire.frame ?? {})];

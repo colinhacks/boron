@@ -640,8 +640,51 @@ input {
     -5px 0;
 }
 
+/*
+ * The whole wheel, because this swatch is the "any colour" option rather than
+ * one colour. Once a fill is picked the inline style paints over it, so the
+ * wheel only ever means "nothing chosen yet".
+ */
+.background-swatch--fill {
+  position: relative;
+  overflow: hidden;
+  background: conic-gradient(
+    from 90deg,
+    #e5484d,
+    #e2a336,
+    #46a758,
+    #0f9bb5,
+    #3e63dd,
+    #8e4ec6,
+    #e5484d
+  );
+}
+
+/*
+ * The platform's colour input, sized to the swatch and made invisible: it is the
+ * control, and the swatch above is its face. `opacity` rather than
+ * `display: none` — a hidden input is not clickable, and a click is the whole
+ * gesture.
+ */
+.background-swatch__picker {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .background-swatch--active {
   outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+/* The label carries no focus of its own, so the input inside it lends its. */
+.background-swatch--fill:has(.background-swatch__picker:focus-visible) {
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 

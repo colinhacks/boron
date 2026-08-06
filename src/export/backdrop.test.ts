@@ -36,6 +36,16 @@ describe("themedBackground", () => {
     expect(themedBackground(null, nord)).toBeNull();
   });
 
+  /**
+   * The eight named backdrops are roles the theme re-derives; a colour somebody
+   * picked is not a role, it is the answer. Adapting it would paint a different
+   * colour than the picker is showing — and a different one again per theme.
+   */
+  it("hands back a picked fill colour untouched, on every theme", () => {
+    const fill = backgroundById("#ff6600")!;
+    for (const theme of THEMES) expect(themedBackground(fill, theme)).toEqual(fill);
+  });
+
   it("is pure in the backdrop and the theme", () => {
     expect(themedBackground(ember, nord)).toEqual(themedBackground(ember, nord));
   });

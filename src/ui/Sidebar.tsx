@@ -1,6 +1,14 @@
 import type { ReactNode } from "react";
 import { THEMES, type Theme } from "../core/themes.ts";
-import { BACKGROUNDS, TRANSPARENT_ID, backgroundCss, type Background } from "../export/background.ts";
+import {
+  BACKGROUNDS,
+  DEFAULT_BACKGROUND_ID,
+  TRANSPARENT_ID,
+  backgroundById,
+  backgroundCss,
+  isFillId,
+  type Background,
+} from "../export/background.ts";
 import { themedBackground } from "../export/backdrop.ts";
 import { MAX_COLUMNS, MAX_TITLE_LENGTH, MIN_COLUMNS, type FrameSettings } from "../export/layout.ts";
 
@@ -81,6 +89,16 @@ export function Sidebar({
   frame,
   onFrameChange,
 }: SidebarProps) {
+  const fill = background && isFillId(background.id) ? background.id : null;
+  // What the colour input opens on: whatever is behind the block right now, so
+  // the picker starts from the current backdrop rather than from a colour
+  // nobody asked for. Transparent has nothing behind it to start from, so it
+  // borrows the default backdrop's first stop — themed, and in the family.
+  const seed =
+    background?.stops[0] ??
+    themedBackground(backgroundById(DEFAULT_BACKGROUND_ID), theme)?.stops[0] ??
+    "#000000";
+
   return (
     <aside className="sidebar">
       <section className="panel">
@@ -132,6 +150,33 @@ export function Sidebar({
             className={`background-swatch background-swatch--none${background === null ? " background-swatch--active" : ""}`}
             onClick={() => onBackgroundChange(TRANSPARENT_ID)}
           />
+          {/*
+            A flat colour, picked rather than chosen from the set. The control is
+            the platform's own colour input, hidden behind a swatch that looks
+            like the eight beside it — a colour picker is one of the few widgets
+            every OS already has a good one of, and it comes with eyedropper,
+            recent colours and keyboard support for free.
+          */}
+          <label
+            title={fill ? `Fill ${fill}` : "Fill colour"}
+            className={`background-swatch background-swatch--fill${fill ? " background-swatch--active" : ""}`}
+            // Unpicked it stays the hue wheel the stylesheet gives it, which is
+            // what says "any colour" rather than naming one.
+            style={fill ? { background: fill } : undefined}
+          >
+            <input
+              type="color"
+              className="background-swatch__picker"
+              aria-label="Fill colour"
+              value={fill ?? seed}
+              // Clicking a swatch selects it, and this one is a swatch. The
+              // input alone would not do that: it fires nothing until the colour
+              // actually *changes*, so clicking the wheel and picking the shade
+              // it already shows would open a dialog and select nothing.
+              onClick={() => onBackgroundChange(fill ?? seed)}
+              onChange={(event) => onBackgroundChange(event.target.value)}
+            />
+          </label>
         </div>
       </section>
 

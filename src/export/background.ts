@@ -96,12 +96,64 @@ export const BACKGROUNDS: readonly Background[] = [
 
 export const DEFAULT_BACKGROUND_ID = "midnight";
 
+/**
+ * A backdrop id that *is* a colour — `#ff6600`, `#f60` — is a flat fill someone
+ * picked, rather than one of the backdrops above.
+ *
+ * Putting the colour in the id is what makes this cost nothing everywhere an id
+ * already travels: the stored workspace, the share link and the picker all name
+ * a backdrop by string, and none of them needed a second field. It is also the
+ * reason a fill is the one backdrop `themedBackground` leaves alone — the named
+ * ones are *roles* the theme re-derives, and a colour someone chose is not a
+ * role. Picking `#ff6600` means the image contains `#ff6600`.
+ *
+ * The pattern is the hex half of `isColor` in core/types.ts and has to stay that
+ * way: a backdrop ends up in a PNG rather than in an escape sequence, but the
+ * picker writes one syntax and both doors should accept the same one.
+ */
+const FILL_ID = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+export function isFillId(id: string): boolean {
+  return FILL_ID.test(id);
+}
+
+/**
+ * A fill id in its one canonical spelling: lowercase, six digits. `#F60` and
+ * `#ff6600` are one choice, and two spellings of it would light two swatches in
+ * the picker — and the platform colour input only accepts the long form, so a
+ * hand-written `#f60` in a link would open the picker on black.
+ */
+export function normalizeFillId(id: string): string {
+  const hex = id.slice(1).toLowerCase();
+  return `#${hex.length === 3 ? [...hex].map((digit) => digit + digit).join("") : hex}`;
+}
+
+/**
+ * The backdrop a fill id names: one stop, because a fill is one colour. Both
+ * exporters already handle a single-stop ramp, and `flatColor` below is what
+ * keeps them from having to — a flat fill is drawn as a flat fill.
+ */
+export function fillBackground(color: string): Background {
+  return { id: color, name: color, angle: 0, stops: [color] };
+}
+
+/** The single colour this backdrop is drawn in, or `null` if it is a ramp. */
+export function flatColor(background: Background): string | null {
+  return background.stops.length === 1 ? background.stops[0]! : null;
+}
+
 export function backgroundById(id: string): Background | null {
+  if (isFillId(id)) return fillBackground(id);
   return BACKGROUNDS.find((background) => background.id === id) ?? null;
 }
 
 export function backgroundCss(background: Background | null): string {
   if (!background) return "transparent";
+  const flat = flatColor(background);
+  // Not a one-stop `linear-gradient()`: CSS requires two, and a browser drops
+  // the whole declaration rather than the surplus — the preview would lose its
+  // backdrop while both exporters kept theirs.
+  if (flat) return flat;
   return `linear-gradient(${background.angle}deg, ${background.stops.join(", ")})`;
 }
 

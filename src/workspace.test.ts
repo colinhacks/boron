@@ -43,6 +43,24 @@ describe("sanitizing", () => {
     expect(sanitizeBackgroundId("mint")).toBe("mint");
   });
 
+  /**
+   * A fill is a colour rather than a name, so there is no list to check it
+   * against — the syntax is the whole check, and it has to be as tight as the
+   * one guarding a run's colour. A backdrop ends up in a PNG rather than in an
+   * escape sequence, but `background: red` in a stored workspace would still be
+   * a value the exporters cannot agree on with the preview.
+   */
+  it("keeps a fill colour, in one spelling, and only when it is one", () => {
+    expect(sanitizeBackgroundId("#ff6600")).toBe("#ff6600");
+    expect(sanitizeBackgroundId("#FF6600")).toBe("#ff6600");
+    // Both short forms land on the same six digits the picker would write.
+    expect(sanitizeBackgroundId("#f60")).toBe("#ff6600");
+    expect(sanitizeBackgroundId("#F60")).toBe("#ff6600");
+    for (const rejected of ["rebeccapurple", "#ff660", "#gggggg", "#ff66000", "red", "#", "rgb(1,2,3)"]) {
+      expect(sanitizeBackgroundId(rejected), rejected).toBe(DEFAULT_BACKGROUND_ID);
+    }
+  });
+
   it("rejects anything that is not a Slate document", () => {
     expect(sanitizeDocument([])).toBeNull();
     expect(sanitizeDocument("lines")).toBeNull();

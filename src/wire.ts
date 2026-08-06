@@ -46,7 +46,13 @@ export interface WireWorkspaceV1 {
   content: string;
   /** Theme id. An unknown one falls back to the default rather than failing. */
   theme?: string;
-  /** Backdrop id, or `"none"` for a transparent frame. */
+  /**
+   * Backdrop id, `"none"` for a transparent frame, or a `#rrggbb` colour for a
+   * flat fill. A colour is a *value* in a field that already held strings, so
+   * this is not a v2: every link written before it still reads exactly the same,
+   * and a build that predates it treats a fill the way it treats any id it does
+   * not know — as the default backdrop.
+   */
   backdrop?: string;
   frame?: WireFrameV1;
 }

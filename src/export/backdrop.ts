@@ -1,6 +1,6 @@
 import { clampChroma, converter, formatHex, modeOklch, modeRgb, useMode } from "culori/fn";
 import { THEMES, type Theme } from "../core/themes.ts";
-import type { Background } from "./background.ts";
+import { isFillId, type Background } from "./background.ts";
 
 // Imported from `culori/fn` rather than `culori`, which registers every colour
 // space the library ships and costs more in the bundle than this whole file.
@@ -242,6 +242,11 @@ const adapted = new Map<string, Background>();
  */
 export function themedBackground(background: Background | null, theme: Theme): Background | null {
   if (!background) return null;
+  // Everything below re-derives a backdrop from the theme's own accents, which
+  // is the right answer for the eight named ones and the wrong one for a colour
+  // somebody picked by hand. A fill is already the answer — adapting it would
+  // hand back a different colour than the picker is showing.
+  if (isFillId(background.id)) return background;
   const key = `${background.id}:${theme.id}`;
   let result = adapted.get(key);
   if (!result) {

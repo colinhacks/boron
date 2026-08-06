@@ -1,4 +1,4 @@
-import { gradientEndpoints } from "./background.ts";
+import { flatColor, gradientEndpoints } from "./background.ts";
 import { trafficLights, type Layout } from "./layout.ts";
 import { CHROME_TITLE_SCALE, chromeBorderColor, chromeTitleColor, resolveShadow, type Scene } from "./scene.ts";
 
@@ -167,13 +167,19 @@ export function buildOps(scene: Scene, opaqueBackdrop?: string): Op[] {
   }
 
   if (background) {
+    // A flat fill has no gradient line to compute and no reason to carry one:
+    // the SVG would emit a `<linearGradient>` with a single stop, and both
+    // renderers already say "filled rectangle" in one colour perfectly well.
+    const flat = flatColor(background);
     ops.push({
       op: "fill",
       x: 0,
       y: 0,
       width: layout.width,
       height: layout.height,
-      paint: { ...gradientEndpoints(background.angle, layout.width, layout.height), stops: background.stops },
+      paint:
+        flat ??
+        { ...gradientEndpoints(background.angle, layout.width, layout.height), stops: background.stops },
     });
   }
 

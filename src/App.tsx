@@ -8,12 +8,7 @@ import { DEFAULT_THEME, themeById } from "./core/themes.ts";
 import { BoxSelectionProvider } from "./editor/BoxSelection.tsx";
 import { TerminalSurface } from "./editor/TerminalEditor.tsx";
 import { withTerminal } from "./editor/withTerminal.ts";
-import {
-  DEFAULT_BACKGROUND_ID,
-  TRANSPARENT_ID,
-  backgroundById,
-  backgroundCss,
-} from "./export/background.ts";
+import { DEFAULT_BACKGROUND_ID, backgroundById, backgroundCss } from "./export/background.ts";
 import { themedBackground } from "./export/backdrop.ts";
 import { FONT_FAMILY, ensureFontsLoaded } from "./export/fonts.ts";
 import {
@@ -534,7 +529,10 @@ export function App() {
             theme={theme}
             onThemeChange={setThemeId}
             background={background}
-            onBackgroundChange={(id) => setBackgroundId(id === TRANSPARENT_ID ? TRANSPARENT_ID : id)}
+            // Every kind of backdrop is a string id and always was — a name, the
+            // transparent one, and now a `#rrggbb` fill. The ternary that used
+            // to sit here returned its own argument on both branches.
+            onBackgroundChange={setBackgroundId}
             frame={frame}
             onFrameChange={handleFrameChange}
           />

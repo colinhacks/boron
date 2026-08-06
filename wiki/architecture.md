@@ -73,7 +73,7 @@ What is left genuinely different is only the dialect:
 
 The preview is the one that can still drift, and the reason is real rather than laziness: it is a live `contenteditable`, so its glyphs are flowed by the browser rather than placed at a measured `x`, and it cannot be driven from a display list without giving that up. Its frame, chrome bar, traffic lights and shadow are still a second description of what `paint.ts` emits. A visual change made to the exporters and not to the preview desynchronizes them silently.
 
-Gradients are the subtle case. `gradientEndpoints` in [src/export/background.ts](../src/export/background.ts) reproduces the CSS gradient-line geometry (0° points up, clockwise, sized so the gradient reaches the corners) so `createLinearGradient`, `<linearGradient>` and the preview's `linear-gradient()` all land on the same ramp.
+Gradients are the subtle case. `gradientEndpoints` in [src/export/background.ts](../src/export/background.ts) reproduces the CSS gradient-line geometry (0° points up, clockwise, sized so the gradient reaches the corners) so `createLinearGradient`, `<linearGradient>` and the preview's `linear-gradient()` all land on the same ramp. A flat fill sidesteps every bit of it: `buildOps` emits the colour as a plain paint rather than a one-stop ramp, and `backgroundCss` writes the colour rather than a `linear-gradient()` — a browser drops a one-stop gradient declaration whole, so the preview would lose its backdrop while both exporters kept theirs.
 
 ## State and persistence
 
@@ -98,7 +98,7 @@ It reaches the app three ways:
 
 
 
-Everything arriving from outside — a stored workspace, a pasted Slate fragment — goes through the sanitizers: `sanitizeFrame` (clamped wider than the sliders, because a drag can exceed them, but still clamped), `sanitizeThemeId`, `sanitizeBackgroundId` in [src/workspace.ts](../src/workspace.ts), and `sanitizeDocument` (capped at `MAX_LINES`) in [src/core/document.ts](../src/core/document.ts). `sanitizeBackgroundId` keeps `TRANSPARENT_ID` and turns anything else unrecognized into the default, because passing an unknown id through would quietly hand back a transparent image. `sanitizeDocument` rebuilds the document leaf by leaf rather than waving a valid-looking one through, and every leaf's marks go through `sanitizeMarks`: that rebuild is what makes the representability invariant hold against bytes somebody else wrote. It lives in `core/` because the clipboard is a door too — see the paste step above.
+Everything arriving from outside — a stored workspace, a pasted Slate fragment — goes through the sanitizers: `sanitizeFrame` (clamped wider than the sliders, because a drag can exceed them, but still clamped), `sanitizeThemeId`, `sanitizeBackgroundId` in [src/workspace.ts](../src/workspace.ts), and `sanitizeDocument` (capped at `MAX_LINES`) in [src/core/document.ts](../src/core/document.ts). `sanitizeBackgroundId` keeps `TRANSPARENT_ID` and a `#rrggbb` fill, and turns anything else unrecognized into the default, because passing an unknown id through would quietly hand back a transparent image. A fill is the one backdrop with no name to check against a list, so the hex syntax *is* the check and it is normalized to one spelling (lowercase, six digits) on the way in — two spellings of one colour would light two swatches in the picker, and the platform colour input only accepts the long form. `sanitizeDocument` rebuilds the document leaf by leaf rather than waving a valid-looking one through, and every leaf's marks go through `sanitizeMarks`: that rebuild is what makes the representability invariant hold against bytes somebody else wrote. It lives in `core/` because the clipboard is a door too — see the paste step above.
 
 
 ## Where do I change X?
@@ -106,7 +106,7 @@ Everything arriving from outside — a stored workspace, a pasted Slate fragment
 | Change | Where |
 | --- | --- |
 | Add or retune a theme | [src/core/themes.ts](../src/core/themes.ts) — one `makeTheme` entry; `isLight` and `selection` are derived |
-| Add a backdrop | [src/export/background.ts](../src/export/background.ts) — one `BACKGROUNDS` entry |
+| Add a backdrop | [src/export/background.ts](../src/export/background.ts) — one `BACKGROUNDS` entry. A flat fill is not one of them: a backdrop id that *is* a colour (`#ff6600`) is a fill the reader picked, and it is the one backdrop `themedBackground` hands back untouched |
 | Change how a paste is interpreted | [src/core/ansi.ts](../src/core/ansi.ts) for escape sequences, [src/core/html-paste.ts](../src/core/html-paste.ts) for rich text, [src/editor/withTerminal.ts](../src/editor/withTerminal.ts) for which flavor wins |
 | Change the prompt heuristic | [src/core/prompt.ts](../src/core/prompt.ts) — and check [src/editor/decorate.ts](../src/editor/decorate.ts), which splits spans against Slate paths separately |
 | Change what a role looks like | `roleMarks` / `effectiveMarks` in [src/core/style.ts](../src/core/style.ts) — as marks, never as colors |

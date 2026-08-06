@@ -1,6 +1,12 @@
 import { sanitizeDocument, type TerminalDocument } from "./core/document.ts";
 import { DEFAULT_THEME, themeById } from "./core/themes.ts";
-import { DEFAULT_BACKGROUND_ID, TRANSPARENT_ID, backgroundById } from "./export/background.ts";
+import {
+  DEFAULT_BACKGROUND_ID,
+  TRANSPARENT_ID,
+  backgroundById,
+  isFillId,
+  normalizeFillId,
+} from "./export/background.ts";
 import { DEFAULT_FRAME, MAX_TITLE_LENGTH, type FrameSettings } from "./export/layout.ts";
 
 /**
@@ -60,14 +66,20 @@ export function sanitizeThemeId(input: unknown): string {
 }
 
 /**
- * `TRANSPARENT_ID` is a real choice and survives; anything else unrecognized is
- * a typo or a retired gradient, and becomes the default. Passing those through
- * would quietly hand back a transparent image instead.
+ * `TRANSPARENT_ID` is a real choice and survives; so is a `#rrggbb` fill, which
+ * is a colour rather than a name and so cannot be checked against a list — the
+ * syntax is the whole check, and anything that is not it never reaches a
+ * renderer. Case is folded because `#FF6600` and `#ff6600` are one choice, and
+ * two spellings of it would light two swatches in the picker.
+ *
+ * Anything else unrecognized is a typo or a retired gradient, and becomes the
+ * default. Passing those through would quietly hand back a transparent image.
  */
 export function sanitizeBackgroundId(input: unknown): string {
   if (input === TRANSPARENT_ID) return TRANSPARENT_ID;
-  if (typeof input === "string" && backgroundById(input)) return input;
-  return DEFAULT_BACKGROUND_ID;
+  if (typeof input !== "string") return DEFAULT_BACKGROUND_ID;
+  if (isFillId(input)) return normalizeFillId(input);
+  return backgroundById(input) ? input : DEFAULT_BACKGROUND_ID;
 }
 
 /**
