@@ -153,4 +153,18 @@ describe("buildOps", () => {
     const ops = buildOps(scene([span("x", 24)], {}, backgroundById("#ff6600")));
     expect(ops[0]).toMatchObject({ op: "fill", x: 0, y: 0, width: 596, height: 296, paint: "#ff6600" });
   });
+
+  /**
+   * JPEG has no alpha, so the theme's background goes down first to keep a
+   * transparent frame from encoding as black. A fill is a flat paint like that
+   * one, and two flat fills of the same rectangle are decided by order alone —
+   * so the ordering is the whole of what makes the picked colour the one you see.
+   */
+  it("lays a fill over the opaque backdrop the alpha-less formats need", () => {
+    const ops = buildOps(scene([span("x", 24)], {}, backgroundById("#ff6600")), "#123456");
+    expect(ops.slice(0, 2)).toMatchObject([
+      { op: "fill", x: 0, y: 0, paint: "#123456" },
+      { op: "fill", x: 0, y: 0, paint: "#ff6600" },
+    ]);
+  });
 });
