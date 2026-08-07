@@ -4,7 +4,7 @@ import { keymap } from "prosemirror-keymap";
 import { DOMSerializer } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
-import { useCallback, useEffect, useImperativeHandle, useRef, type MouseEvent, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type MouseEvent, type Ref } from "react";
 import type { LineElement, TerminalDocument } from "../core/document.ts";
 import type { Theme } from "../core/themes.ts";
 import { FONT_FAMILY } from "../export/fonts.ts";
@@ -60,6 +60,7 @@ export function TerminalSurface({
   handle,
 }: TerminalSurfaceProps) {
   const host = useRef<HTMLDivElement | null>(null);
+  const [drawing, setDrawing] = useState(false);
   const viewRef = useRef<EditorView | null>(null);
   const { box, ranges, measureGrid, setBox, clear } = useBoxSelection();
   const formatting = useFormatting();
@@ -210,6 +211,27 @@ export function TerminalSurface({
     refreshStyles((meta) => view.dispatch(view.state.tr.setMeta(styleKey, meta)));
   }, [theme, halfLeading, ranges]);
 
+  /**
+   * Holding the modifier says what the next drag will do.
+   *
+   * A gesture that changes meaning with a key held is invisible until you try
+   * it; a crosshair is the conventional "you are about to draw a region" cursor
+   * and costs nothing to show. Cleared on blur too, because a key released while
+   * the window is in the background never sends its `keyup`.
+   */
+  useEffect(() => {
+    const update = (event: globalThis.KeyboardEvent) => setDrawing(event.altKey);
+    const drop = () => setDrawing(false);
+    window.addEventListener("keydown", update);
+    window.addEventListener("keyup", update);
+    window.addEventListener("blur", drop);
+    return () => {
+      window.removeEventListener("keydown", update);
+      window.removeEventListener("keyup", update);
+      window.removeEventListener("blur", drop);
+    };
+  }, []);
+
   // Escape drops the box wherever focus is. Reaching for the toolbar must not
   // take the rectangle away, so it survives a blur exactly as a selection does.
   useEffect(() => {
@@ -291,6 +313,7 @@ export function TerminalSurface({
         fontSize,
         lineHeight: `${lineHeight}px`,
         caretColor: theme.foreground,
+        ...(drawing ? { cursor: "crosshair" } : {}),
         /*
          * The block wraps where a terminal of this many columns would, which
          * takes all three of these — `computeLayout` cuts the exported rows to a

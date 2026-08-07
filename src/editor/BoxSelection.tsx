@@ -58,8 +58,6 @@ export interface BoxSelectionProviderProps {
   /** One cell's advance, unscaled. The whole coordinate system rests on it. */
   charWidth: number;
   lineHeight: number;
-  /** Space between the terminal's edge and its text. */
-  padding: number;
   children: ReactNode;
 }
 
@@ -85,7 +83,6 @@ export function BoxSelectionProvider({
   columns,
   charWidth,
   lineHeight,
-  padding,
   children,
 }: BoxSelectionProviderProps) {
   const { view } = useEditorView();
@@ -117,15 +114,20 @@ export function BoxSelectionProvider({
     const rect = node.getBoundingClientRect();
     const scale = node.offsetWidth > 0 ? rect.width / node.offsetWidth : 1;
     if (!Number.isFinite(scale) || scale <= 0) return null;
+    // `view.dom` is the element the text is laid out in, so its top-left *is*
+    // cell (0, 0). Slate's equivalent was the element carrying the padding, and
+    // this used to add that padding back on — which put every cell one padding
+    // down and to the right of the pointer. Measured against the first
+    // character's own rect, not reasoned about.
     return {
-      left: rect.left + padding * scale,
-      top: rect.top + padding * scale,
+      left: rect.left,
+      top: rect.top,
       charWidth: charWidth * scale,
       lineHeight: lineHeight * scale,
       columns,
       rowCount: visualRows(lines, columns).length,
     };
-  }, [view, lines, charWidth, lineHeight, padding, columns]);
+  }, [view, lines, charWidth, lineHeight, columns]);
 
   const spans = useMemo(() => (box ? boxSpans(lines, columns, box) : []), [box, columns, lines]);
   const ranges = useMemo(() => (box ? boxRanges(lines, columns, box) : []), [box, columns, lines]);

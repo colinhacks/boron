@@ -434,7 +434,6 @@ export function App({ shared }: AppProps = {}) {
           columns={frame.columns}
           charWidth={layout?.charWidth ?? 0}
           lineHeight={layout?.lineHeight ?? 0}
-          padding={TERMINAL_PADDING}
         >
         <main className="app-main">
           <div className="workspace">
