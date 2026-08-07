@@ -322,7 +322,7 @@ input {
  * what App.tsx measures to work out how far to zoom the preview out. Splitting
  * it off the stage is what keeps that measurement honest — the stage's padding
  * is outside this box rather than a number to subtract back off it, and the
- * caption, which hangs under the block itself, is out of flow and so costs the
+ * legend, which hangs under the block itself, is out of flow and so costs the
  * measurement nothing either.
  *
  * `safe center` rather than `center` because the two part company precisely when
@@ -352,23 +352,30 @@ input {
  * `.frame-fit`, whose box is the scaled block exactly, so it follows the block
  * up and down as the preview zooms instead of sitting a windowful below it.
  *
- * Out of flow on purpose: the caption must not count against the fit box above,
+ * Out of flow on purpose: the legend must not count against the fit box above,
  * which is measured to decide how far the preview zooms out. In flow it would be
  * a number to subtract back off — the thing that box exists to avoid.
  *
  * Centred on the block rather than stretched across it, and `nowrap`, because
- * the block can be twenty columns wide and the sentence would wrap to four lines
- * inside it.
+ * the block can be twenty columns wide and a line would wrap to four inside it.
+ * Each entry is its own row: these are unrelated gestures, and the list is meant
+ * to be added to.
  */
-.stage__caption {
+.stage__legend {
   position: absolute;
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
   margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   color: var(--text-faint);
   font-size: 12px;
   white-space: nowrap;
+  text-align: center;
 }
 
 .frame-fit {

@@ -5,6 +5,7 @@ import { DEFAULT_THEME, themeById } from "./core/themes.ts";
 import { BoxSelectionProvider } from "./editor/BoxSelection.tsx";
 import { EditorProvider } from "./editor/context.tsx";
 import { TerminalSurface, type TerminalHandle } from "./editor/TerminalEditor.tsx";
+import { ALT_LABEL } from "./ui/platform.ts";
 import {
   DEFAULT_BACKGROUND_ID,
   backgroundById,
@@ -93,24 +94,17 @@ function loadPersisted(): Partial<Workspace> {
 const MIN_PREVIEW_SCALE = 6 / FONT_SIZE;
 
 /**
- * What to call the box-selection modifier on this machine.
+ * The how-to legend under the block, one line per thing you can do.
  *
- * A hidden gesture nobody is told about is a gesture nobody uses, and this
- * caption is the only place the app says it.
- *
- * `userAgentData` is asked first because `navigator.platform` is deprecated,
- * but it is joined rather than used as a fallback: Chrome answers
- * `userAgentData.platform` with an **empty string** on macOS unless the hint is
- * requested, and `??` treats that as a present value — which silently told
- * every Mac to press "Alt". Measured in this browser, not assumed.
+ * A list rather than a sentence because these are unrelated gestures, and a
+ * sentence that strings unrelated gestures together with "or" reads as one
+ * choice between three things. It is also the shape that grows: the next trick
+ * worth telling anyone about is another entry here, not a longer sentence.
  */
-const ALT_LABEL = /mac/i.test(
-  [(navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform, navigator.platform]
-    .filter(Boolean)
-    .join(" "),
-)
-  ? "⌥"
-  : "Alt";
+const LEGEND: readonly string[] = [
+  "Edit above, or paste from your terminal",
+  `${ALT_LABEL}-drag to select a column`,
+];
 
 type CopyMode = "image" | "link" | "ansi" | "chalk" | "text";
 
@@ -222,7 +216,7 @@ export function App({ shared }: AppProps = {}) {
     const element = fitRef.current;
     if (!element || !layout) return;
     // The box is the space the block may occupy, so its own client size is the
-    // budget — no subtracting the stage's padding or the caption back out.
+    // budget — no subtracting the stage's padding or the legend back out.
     const fit = () => {
       const scale = Math.min(1, element.clientWidth / layout.width, element.clientHeight / layout.height);
       setPreviewScale(Math.max(MIN_PREVIEW_SCALE, scale));
@@ -565,9 +559,11 @@ export function App({ shared }: AppProps = {}) {
                     wherever that ends up, rather than at the foot of a stage
                     that is as tall as the window. It is positioned out of flow,
                     which is what keeps it off the measurement above. */}
-                <p className="stage__caption">
-                  Edit above, paste from your terminal, or {ALT_LABEL}-drag to select a column.
-                </p>
+                <ul className="stage__legend">
+                  {LEGEND.map((entry) => (
+                    <li key={entry}>{entry}</li>
+                  ))}
+                </ul>
                 </div>
               ) : (
                 <p className="stage__loading">Loading font…</p>
