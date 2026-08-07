@@ -6,10 +6,10 @@
 
   This is HTML rather than an SVG fed through rsvg-convert like the rest of the
   identity, for one reason: the card is set in JetBrains Mono, which is a webfont
-  shipped in node_modules. rsvg-convert resolves fonts through fontconfig, finds
-  no system JetBrains Mono, and silently falls back to a generic mono — which is
-  what the old card shipped with. A browser is the only renderer here that gets
-  the typeface right.
+  vendored into src/assets/fonts/. rsvg-convert resolves fonts through
+  fontconfig, finds no system JetBrains Mono, and silently falls back to a
+  generic mono — which is what the old card shipped with. A browser is the only
+  renderer here that gets the typeface right.
 -->
 <html lang="en">
   <head>
@@ -18,12 +18,12 @@
     <style>
       @font-face {
         font-family: "Boron Mono";
-        src: url("/node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2") format("woff2");
+        src: url("/src/assets/fonts/boron-mono-400-normal.woff2") format("woff2");
         font-weight: 400;
       }
       @font-face {
         font-family: "Boron Mono";
-        src: url("/node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-700-normal.woff2") format("woff2");
+        src: url("/src/assets/fonts/boron-mono-700-normal.woff2") format("woff2");
         font-weight: 700;
       }
 

@@ -19,7 +19,7 @@ What remains is one route and one piece of middleware:
 | `/` with `?s=` present | The app shell, with `og:image` pointed at the image route and an `og:title`/`og:description` derived from the payload. Middleware, short-circuiting immediately when there is no `s`, so the bare homepage stays static |
 | `GET /og/<payload>.png` | The rendered PNG |
 
-## Blocker 2 — layout needs a browser, and the bundled font is latin-only
+## Blocker 2 — layout needs a browser
 
 `computeLayout` in [src/export/layout.ts](../src/export/layout.ts) measures every span with `CanvasRenderingContext2D.measureText`, and derives half-leading from `fontBoundingBoxAscent`/`Descent`. There is no canvas on a serverless runtime.
 
@@ -28,18 +28,17 @@ Measuring what the browser actually does turns this from a problem into an oppor
 - Every glyph **that comes from the bundled font** advances exactly `9px` — `0.6 × fontSize`, identical across all four faces (regular, bold, italic, bold-italic).
 - Measurement is exactly additive: `measureText("$ npm run build --workspace=@acme/app")` minus `length × 9` is **0.000px**.
 
-So for text the app actually ships a font for, layout needs no rasterizer at all — it is `length × 0.6 × fontSize`. But:
+So for text the app ships a font for, layout needs no rasterizer at all — it is `length × 0.6 × fontSize`.
 
-- **The bundled font is latin-only.** [src/export/fonts.ts](../src/export/fonts.ts) imports four `jetbrains-mono-latin-*.woff2` files, and `@fontsource/jetbrains-mono` ships only the Google-Fonts subsets (latin, latin-ext, cyrillic, cyrillic-ext, greek, vietnamese). Google strips box-drawing, arrows and dingbats out of all of them.
-- **So terminal output falls back to a system font.** Measured against a deliberately absent family to force fallback: `M`, `0` and `é` come from the bundled font at `9.000px`, while `─ │ ╭ ➜ ✓ ✗ ⚠ █` every one measure `9.031px` — byte-identical to the no-font-available case. `🚀` is `19px` and `中` is `15.3px`, both from fallback too. (`document.fonts.check()` returns `true` for all of them; it reports whether *some* font in the stack can render, not whether the first one has the glyph. Measure, don't ask.)
+**The half of this that used to be a blocker is now fixed.** The bundle was four Google-Fonts latin subsets, which have box-drawing, arrows and dingbats stripped out of them, so terminal output fell through to the reader's system font at `9.031px` against the bundled `9.000px` — the same document rendering at different widths on different machines, and an exported SVG carrying none of those glyphs. Boron now bundles JetBrains Mono patched by Nerd Fonts, split into a text family and an on-demand icon family; every one of its 12,121 mapped glyphs advances exactly `0.600 em`. See [fonts.md](fonts.md). What is left of this blocker is only the rasterizer.
 
-**This is a live defect in the promise share links already make.** The sample document itself contains `➜`, `✓`, `✗` and `⚠`. Those glyphs are laid out using whatever monospace font the reader's OS supplies, so the same link renders at different widths on macOS and on Windows — and an exported SVG has the same gap, because `embeddedFontCss` inlines only the four latin faces. The config travels; the fonts do not.
-
-**One fix closes both.** Self-host the upstream JetBrains Mono release (from JetBrains, not the Google-Fonts subsets — the upstream font does contain box-drawing and arrows), then replace the canvas measurement with a pure function:
+So the remaining work is to replace the canvas measurement with a pure function:
 
 - `charWidth = FONT_SIZE * 0.6`, exactly.
 - Width is a per-codepoint sum, `1` for ordinary cells and `2` for the wide ranges (CJK, emoji) — which is `wcwidth`, the same rule a real terminal uses to decide how many cells a glyph occupies. Arguably more correct than asking Canvas2D.
 - Ascent and descent become constants read once from the font's own metrics rather than from `measureText`.
+
+Two things still fall outside the bundled font and so still need `wcwidth` rather than a `× 0.6`: emoji (`🚀` measures `19px`) and CJK (`中`, `15.3px`). Both are genuinely two cells wide, which is what `wcwidth` says. (A warning that survives from the original measurement: `document.fonts.check()` returned `true` for every one of the glyphs that was in fact falling back. It reports whether *some* font in the stack can render, not whether the first one has the glyph. Measure, don't ask.)
 
 Layout then runs anywhere, is identical on client and server, and — the part that matters most — is finally identical *across browsers*, which is what the share link claimed all along.
 
@@ -94,8 +93,8 @@ Because entries are immutable and content-addressed there is no invalidation pro
 ## Rough shape of the work
 
 1. ~~Move the payload to the query string.~~ Done.
-2. Self-host upstream JetBrains Mono, replace the four latin subsets. Independently valuable — it fixes cross-browser fidelity and the SVG export today, with no server involved.
+2. ~~Self-host the font, replace the four latin subsets.~~ Done — as Nerd-Font-patched JetBrains Mono rather than the plain upstream release, which closes the icon gap at the same time. See [fonts.md](fonts.md).
 3. Make `computeLayout` pure (`wcwidth` widths, constant metrics). The one risky step: measured widths shift slightly, so every existing link and saved workspace re-lays-out. They still decode; they just get correct widths.
 4. Add the middleware, the image route and the resvg rasterizer, with the cache headers above.
 
-Steps 2 and 3 are the real work and stand on their own merits. Step 4 is small once they are done.
+Step 3 is the real work left and stands on its own merits. Step 4 is small once it is done — and note that resvg will need the font bytes handed to it, which now means the icon face too whenever the payload contains one.

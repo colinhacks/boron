@@ -206,3 +206,20 @@ export function buildOps(scene: Scene, opaqueBackdrop?: string): Op[] {
 
   return ops;
 }
+
+/**
+ * Every glyph the scene will draw, flattened out of the clip nesting.
+ *
+ * The ops are where to ask, rather than the document: the chrome title is drawn
+ * from the frame settings and never appears in the document at all, and it is
+ * exactly the sort of thing that would be discovered missing from an export
+ * after someone pasted an icon into a window title.
+ */
+export function textOps(ops: readonly Op[]): Extract<Op, { op: "text" }>[] {
+  const found: Extract<Op, { op: "text" }>[] = [];
+  for (const op of ops) {
+    if (op.op === "text") found.push(op);
+    else if (op.op === "clip") found.push(...textOps(op.children));
+  }
+  return found;
+}

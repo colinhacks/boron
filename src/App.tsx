@@ -11,7 +11,7 @@ import {
   backgroundCss,
 } from "./export/background.ts";
 import { themedBackground } from "./export/backdrop.ts";
-import { FONT_FAMILY, ensureFontsLoaded } from "./export/fonts.ts";
+import { FONT_FAMILY, ensureFontsLoaded, hasIconGlyphs } from "./export/fonts.ts";
 import {
   IMAGE_FORMATS,
   copyImageToClipboard,
@@ -180,6 +180,22 @@ export function App({ shared }: AppProps = {}) {
       cancelled = true;
     };
   }, []);
+
+  // The icon face is 880 KB against 203 KB for all four text faces, and most
+  // terminal screenshots contain no icon at all — so it is fetched the moment a
+  // paste or a keystroke puts a Nerd Font glyph in the document, and not before.
+  // The title counts: the chrome bar is drawn in the same font.
+  const needsIcons = useMemo(
+    () => hasIconGlyphs(frame.title) || value.some((line) => line.children.some((leaf) => hasIconGlyphs(leaf.text))),
+    [value, frame.title],
+  );
+
+  useEffect(() => {
+    if (!needsIcons) return;
+    // Nothing to cancel: the face is cached by URL, so a document that loses its
+    // last icon and gets it back does not fetch twice.
+    void ensureFontsLoaded({ icons: true });
+  }, [needsIcons]);
 
   useEffect(() => {
     const state: Workspace = { document: value, themeId, backgroundId, frame };

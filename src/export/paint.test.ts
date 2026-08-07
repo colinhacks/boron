@@ -3,7 +3,7 @@ import type { ResolvedStyle } from "../core/style.ts";
 import { themeById } from "../core/themes.ts";
 import { BACKGROUNDS, backgroundById } from "./background.ts";
 import { DEFAULT_FRAME, type FrameSettings, type LaidSpan, type Layout } from "./layout.ts";
-import { buildOps, isGradient, type Op } from "./paint.ts";
+import { buildOps, isGradient, textOps, type Op } from "./paint.ts";
 import type { Scene } from "./scene.ts";
 
 /**
@@ -166,5 +166,26 @@ describe("buildOps", () => {
       { op: "fill", x: 0, y: 0, paint: "#123456" },
       { op: "fill", x: 0, y: 0, paint: "#ff6600" },
     ]);
+  });
+});
+
+describe("textOps", () => {
+  it("reaches the glyphs nested inside the clip group", () => {
+    const ops = buildOps(scene([span("hello", 24), span("world", 69)]));
+    // Every text op in this scene is inside the clip, so a flattener that only
+    // walked the top level would report none at all.
+    expect(ops.some((op) => op.op === "text")).toBe(false);
+    expect(textOps(ops).map((op) => op.text)).toEqual(["hello", "world"]);
+  });
+
+  it("includes the window title, which is drawn from the frame and not the document", () => {
+    const ops = textOps(buildOps(scene([span("body", 24)], { showChrome: true, title: "zsh — boron" })));
+    expect(ops.map((op) => op.text)).toContain("zsh — boron");
+  });
+
+  it("carries the weight and style each run is drawn at", () => {
+    const ops = textOps(buildOps(scene([span("b", 24, { bold: true }), span("i", 33, { italic: true })])));
+    expect(ops.filter((op) => op.bold).map((op) => op.text)).toEqual(["b"]);
+    expect(ops.filter((op) => op.italic).map((op) => op.text)).toEqual(["i"]);
   });
 });

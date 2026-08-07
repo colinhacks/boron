@@ -1,6 +1,6 @@
-import { ensureFontsLoaded } from "./fonts.ts";
-import { fontString } from "./layout.ts";
-import { buildOps, isGradient, type Op, type Paint } from "./paint.ts";
+import { ensureFontsLoaded, fontUsage } from "./fonts.ts";
+import { fontString, type Layout } from "./layout.ts";
+import { buildOps, isGradient, textOps, type Op, type Paint } from "./paint.ts";
 import type { Scene } from "./scene.ts";
 
 function roundedRect(
@@ -87,20 +87,28 @@ function paint(ctx: CanvasRenderingContext2D, ops: readonly Op[]): void {
   }
 }
 
-export function drawScene(ctx: CanvasRenderingContext2D, scene: Scene, opaqueBackdrop?: string): void {
-  ctx.clearRect(0, 0, scene.layout.width, scene.layout.height);
-  paint(ctx, buildOps(scene, opaqueBackdrop));
+/**
+ * Takes a prepared display list rather than a scene, because the caller has to
+ * walk it first anyway — which fonts to wait for is read off the same ops.
+ */
+export function drawScene(ctx: CanvasRenderingContext2D, layout: Layout, ops: readonly Op[]): void {
+  ctx.clearRect(0, 0, layout.width, layout.height);
+  paint(ctx, ops);
 }
 
 export async function renderToCanvas(scene: Scene, scale: number, opaqueBackdrop?: string): Promise<HTMLCanvasElement> {
-  await ensureFontsLoaded();
+  const ops = buildOps(scene, opaqueBackdrop);
+  // Awaited before the first `fillText`, and awaited for the icon face too when
+  // the scene needs it: a canvas draws whatever is loaded at the moment it is
+  // asked and never repaints itself when a font arrives late.
+  await ensureFontsLoaded({ icons: fontUsage(textOps(ops)).icons });
   const canvas = document.createElement("canvas");
   canvas.width = Math.ceil(scene.layout.width * scale);
   canvas.height = Math.ceil(scene.layout.height * scale);
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("2D canvas is unavailable");
   ctx.scale(scale, scale);
-  drawScene(ctx, scene, opaqueBackdrop);
+  drawScene(ctx, scene.layout, ops);
   return canvas;
 }
 

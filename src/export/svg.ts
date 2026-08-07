@@ -1,5 +1,5 @@
-import { FONT_NAME, embeddedFontCss } from "./fonts.ts";
-import { buildOps, isGradient, type Op, type Paint } from "./paint.ts";
+import { FONT_NAME, ICON_FONT_NAME, embeddedFontCss, fontUsage } from "./fonts.ts";
+import { buildOps, isGradient, textOps, type Op, type Paint } from "./paint.ts";
 import type { Scene } from "./scene.ts";
 
 const XML_ESCAPES: Record<string, string> = {
@@ -18,7 +18,7 @@ function round(value: number): string {
   return (Math.round(value * 100) / 100).toString();
 }
 
-const FONT_STACK = `${FONT_NAME}, ui-monospace, monospace`;
+const FONT_STACK = `${FONT_NAME}, ${ICON_FONT_NAME}, ui-monospace, monospace`;
 
 /**
  * SVG names its gradients, filters and clip paths in `<defs>` and refers to them
@@ -117,8 +117,9 @@ function emit(ops: readonly Op[], defs: Defs): string {
  */
 export async function renderToSvg(scene: Scene): Promise<string> {
   const { layout } = scene;
-  const defs = makeDefs(await embeddedFontCss());
-  const body = emit(buildOps(scene), defs);
+  const ops = buildOps(scene);
+  const defs = makeDefs(await embeddedFontCss(fontUsage(textOps(ops))));
+  const body = emit(ops, defs);
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" ` +

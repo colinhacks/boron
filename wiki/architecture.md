@@ -57,7 +57,9 @@ The wrap is visual only. The document keeps its logical lines, so `toAnsi` and t
 
 **The wrap rule has a second implementation, on purpose.** `visualRows` in [src/editor/box.ts](../src/editor/box.ts) restates it for the editor, because a rectangular selection is drawn in the rows you can see and the exporters' row list is not addressable by Slate path. The two must agree exactly or a box highlights different characters than the picture shows, and `box.test.ts` pins them against each other over a table of documents and widths. Agreement is cheap only because the wrap is a count rather than a measurement — row *k* of a line starts at code point *k × columns*, which needs no layout. **Change `wrapRenderLines` and you must change `visualRows` with it.**
 
-Where this drifts is a character the bundled font does not cover. Rows are cut by count, but an emoji or a box-drawing glyph is laid out against the reader's system font at whatever advance that has — so the browser fits fewer of them in `wrapWidth` than the count allows, and the preview breaks such a row a character or two earlier than the export does. `layout.widest` survives as the guard for the same reason: it can only widen the block, so an over-wide row gets a wider block rather than a clipped glyph. It is the same font-coverage gap [og-images.md](og-images.md) measures from the other side.
+Where this drifts is a character the bundled font does not cover. Rows are cut by count, but such a glyph is laid out against the reader's system font at whatever advance that has — so the browser fits fewer of them in `wrapWidth` than the count allows, and the preview breaks such a row a character or two earlier than the export does. `layout.widest` survives as the guard for the same reason: it can only widen the block, so an over-wide row gets a wider block rather than a clipped glyph.
+
+That set used to include box drawing, arrows and dingbats, which is most of what a terminal draws. It no longer does: the bundled font now covers them, and the Nerd Font icons besides, every glyph at the same `0.6 em` the count assumes — see [fonts.md](fonts.md). What is left over is emoji and CJK, which are genuinely two cells wide and which the count already gets wrong in the same direction for both renderers.
 
 ## The three renderers
 
@@ -120,6 +122,7 @@ Everything arriving from outside — a stored workspace, a pasted Slate fragment
 | Change the copy-out formats | [src/core/serialize.ts](../src/core/serialize.ts); the menu is `COPY_MODES` in [src/App.tsx](../src/App.tsx) |
 | Change the export formats or scale | [src/export/index.ts](../src/export/index.ts) |
 | Change the starting document | [src/ui/sample.ts](../src/ui/sample.ts), and bump `STORAGE_KEY` so it reaches existing visitors |
+| Change the bundled font, or what it covers | [scripts/build-fonts.py](../scripts/build-fonts.py) for the subsetting, [src/export/fonts.ts](../src/export/fonts.ts) for the families and when the icon face is fetched — the PUA range list appears in both and they have to agree. [fonts.md](fonts.md) has the reasoning |
 
 ## Testing
 
