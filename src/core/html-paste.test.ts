@@ -269,5 +269,33 @@ describe("parseHtmlClipboard", () => {
       const withPlain = parseHtmlClipboard(GHOSTTY_1_3_1, ansi16, GHOSTTY_1_3_1_PLAIN);
       expect(withPlain).toEqual(parseHtmlClipboard(GHOSTTY_1_3_1, ansi16));
     });
+
+    /**
+     * The rule itself, stated without reference to any one site's bytes: rows
+     * that arrive as bare inline spans are recovered from the plain flavour, and
+     * a run keeps the styling the markup gave it across the break. The fixture
+     * above proves this happens in the wild; this proves what the rule *is*, so
+     * neither can quietly stop meaning the other.
+     */
+    it("recovers rows from any markup that lost them, keeping each run's marks", () => {
+      const html =
+        '<span style="color: rgb(255,255,255)"><span style="color: rgb(255,0,0)">red</span>tail</span>' +
+        '<span style="color: rgb(255,255,255)"><span style="color: rgb(0,0,255)">blue</span></span>';
+      const lines = parseHtmlClipboard(html, ansi16, "redtail\nblue")!;
+      expect(lines.map((line) => line.spans.map((span) => span.text).join(""))).toEqual(["redtail", "blue"]);
+      // Pure `rgb(255,0,0)` is the palette's BRIGHT red, not its red.
+      expect(lines[0]!.spans.find((span) => span.text === "red")?.marks).toEqual({ fg: "redBright" });
+      expect(lines[1]!.spans.find((span) => span.text === "blue")?.marks).toEqual({ fg: "blue" });
+      // And the container's own white stays "no colour at all" across the break.
+      expect(lines[0]!.spans.find((span) => span.text === "tail")?.marks).toEqual({});
+    });
+
+    /** A break that falls INSIDE a styled run still cuts it, marks intact on both halves. */
+    it("cuts a run that straddles a row boundary", () => {
+      const html = '<span style="color: rgb(255,0,0)">abcd</span>';
+      const lines = parseHtmlClipboard(html, ansi16, "ab\ncd")!;
+      expect(lines.map((line) => line.spans.map((span) => span.text).join(""))).toEqual(["ab", "cd"]);
+      expect(lines.every((line) => line.spans.every((span) => span.marks.fg === "redBright"))).toBe(true);
+    });
   });
 });
