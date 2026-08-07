@@ -135,7 +135,7 @@ function descend(
   element: Element,
   parent: Inherited,
   declarations: Declarations,
-  isBlock: boolean,
+  isContainer: boolean,
 ): Inherited {
   const next: Inherited = { ...parent };
   const tag = element.tagName.toLowerCase();
@@ -155,7 +155,7 @@ function descend(
   const background = normalizeColor(declarations["background-color"] ?? declarations["background"]);
   if (background) next.background = background;
 
-  if (isBlock) {
+  if (isContainer) {
     if (color) next.rowColor = color;
     if (background) next.rowBackground = background;
   }
@@ -277,9 +277,17 @@ function walk(node: Node, style: Inherited, collector: Collector, rules: readonl
   // Same distinction `findRootColors` draws: an element whose entire content is
   // text is a styled run, not a row, however it is displayed — so its color is
   // something the terminal said and not a backdrop to discount.
+  //
+  // What makes a color a backdrop is being a CONTAINER, not being a block, and
+  // the two are not the same thing once the markup has been through a clipboard.
+  // Chrome serializes computed styles into the `style` attribute but omits
+  // `display`, so a docs site whose rows are `<span>`s made block by a stylesheet
+  // arrives as plain inline spans — and gating this on `isBlock` then read the
+  // page's own background as something the author said about every character.
+  // A nubjs.com code block came through with `bg` on all 1799 of them.
   const children = Array.from(element.childNodes);
   const isStyledRun = children.length > 0 && children.every((child) => child.nodeType === 3);
-  const next = descend(element, style, declarations, isBlock && !isStyledRun);
+  const next = descend(element, style, declarations, !isStyledRun);
   for (const child of Array.from(element.childNodes)) walk(child, next, collector, rules);
 
   if (isBlock && collector.current.length > 0) breakLine(collector);
@@ -364,6 +372,60 @@ function defaultColors(lines: readonly Run[][]): { color: string | null; backgro
 }
 
 /**
+ * The rows the markup lost, taken from the plain-text flavour.
+ *
+ * A clipboard states its rows twice — once as markup, once as newlines in
+ * `text/plain` — and the second one cannot be mangled. The first one can: Chrome
+ * writes computed styles into the `style` attribute but **omits `display`**, so
+ * a page whose rows are `<span>`s made block by a stylesheet arrives as a run of
+ * plain inline spans with no row boundary anywhere in it. That is the ordinary
+ * shape of a syntax-highlighted code block on a docs site — Shiki emits exactly
+ * it — and a nubjs.com block came through as one 1799-character line.
+ *
+ * There is nothing left in such markup to recognize: no `<br>`, no newline, no
+ * `display`, and a class name is the site's business rather than a contract. So
+ * the text is what settles it. Each flavour is believed about what it alone
+ * knows — the markup about styling, the plain text about where the lines are.
+ *
+ * Applied only when the two agree character for character, which makes it a
+ * no-op wherever the markup already got its rows right: cutting at the same
+ * offsets returns what it was handed. Where they disagree the markup is left
+ * exactly as it was, because then the plain text is describing something else
+ * and its newlines say nothing about these runs.
+ */
+function relineFromPlainText(lines: readonly ParsedLine[], plain: string): readonly ParsedLine[] {
+  const rows = plain.replace(/\r\n?/g, "\n").split("\n");
+  while (rows.length > 0 && rows[rows.length - 1]!.trim() === "") rows.pop();
+  // Only ever adds rows. Fewer would mean the plain text is the poorer account.
+  if (rows.length <= lines.length) return lines;
+
+  const spans = lines.flatMap((line) => line.spans);
+  if (spans.map((span) => span.text).join("") !== rows.join("")) return lines;
+
+  const out: ParsedLine[] = [];
+  let index = 0;
+  let offset = 0;
+  for (const row of rows) {
+    const cut: ParsedSpan[] = [];
+    let remaining = row.length;
+    while (remaining > 0 && index < spans.length) {
+      const span = spans[index]!;
+      const take = Math.min(remaining, span.text.length - offset);
+      if (take > 0) cut.push({ text: span.text.slice(offset, offset + take), marks: { ...span.marks } });
+      offset += take;
+      remaining -= take;
+      if (offset >= span.text.length) {
+        index++;
+        offset = 0;
+      }
+    }
+    // An empty row still occupies one, the same as everywhere else here.
+    out.push({ spans: cut.length > 0 ? cut : [{ text: "", marks: {} }] });
+  }
+  return out;
+}
+
+/**
  * Turn a terminal's rich-text clipboard flavor into styled lines.
  *
  * Colors are mapped back onto named palette entries where they match a known
@@ -373,7 +435,12 @@ function defaultColors(lines: readonly Run[][]): { color: string | null; backgro
  * Returns `null` when the markup carries no styling at all, which is the signal
  * to fall back to plain text and the `$`-prompt heuristic.
  */
-export function parseHtmlClipboard(html: string, ansi16: readonly string[]): ParsedLine[] | null {
+export function parseHtmlClipboard(
+  html: string,
+  ansi16: readonly string[],
+  /** The same copy's `text/plain`, which is the authority on where the rows are. */
+  plain?: string,
+): ParsedLine[] | null {
   if (!html.trim()) return null;
 
   const parsed = new DOMParser().parseFromString(html, "text/html");
@@ -409,10 +476,11 @@ export function parseHtmlClipboard(html: string, ansi16: readonly string[]): Par
     ansi16,
   };
 
-  const lines: ParsedLine[] = collector.lines.map((runs) => ({
+  const parsedLines: ParsedLine[] = collector.lines.map((runs) => ({
     spans: runs.length > 0 ? runs.map((run) => toSpan(run, defaults)) : [{ text: "", marks: {} }],
   }));
 
+  const lines = [...(plain ? relineFromPlainText(parsedLines, plain) : parsedLines)];
   while (lines.length > 0 && lines[lines.length - 1]!.spans.every((span) => span.text.trim() === "")) {
     lines.pop();
   }

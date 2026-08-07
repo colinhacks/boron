@@ -71,7 +71,10 @@ export function withTerminal(editor: Editor, ansi16: () => readonly string[]): E
     }
 
     if (html) {
-      const parsed = parseHtmlClipboard(html, ansi16());
+      // The plain flavour rides along because the same copy states its rows
+      // twice and only one of the two survives a clipboard intact — see
+      // `relineFromPlainText`. It decides nothing about styling.
+      const parsed = parseHtmlClipboard(html, ansi16(), text);
       if (parsed) {
         insertParsed(editor, parsed);
         return;

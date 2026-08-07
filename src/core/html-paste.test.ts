@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { GHOSTTY_1_3_1, TERMINAL_APP_2_15 } from "./clipboard-fixtures.ts";
+import {
+  GHOSTTY_1_3_1,
+  GHOSTTY_1_3_1_PLAIN,
+  NUBJS_SHIKI_BLOCK,
+  NUBJS_SHIKI_BLOCK_PLAIN,
+  TERMINAL_APP_2_15,
+} from "./clipboard-fixtures.ts";
 import { parseHtmlClipboard } from "./html-paste.ts";
 import { DEFAULT_THEME } from "./themes.ts";
 
@@ -191,5 +197,77 @@ describe("parseHtmlClipboard", () => {
   it("discounts the terminal background rather than painting it onto every run", () => {
     const lines = parseHtmlClipboard(TERMINAL_APP_2_15, ansi16)!;
     expect(lines.flatMap((line) => line.spans).every((span) => span.marks.bg === undefined)).toBe(true);
+  });
+
+  /**
+   * A backdrop is discounted for being declared on a CONTAINER, never for being
+   * a particular colour. A terminal that really does say `[40m` on one run
+   * means it, and that run has to keep its black — so this is the control that
+   * stops the rule above from becoming "drop black backgrounds".
+   */
+  it("keeps a background a run puts on itself, however dark", () => {
+    const html =
+      '<div style="color: rgb(255,255,255)">plain ' +
+      '<span style="background-color: rgb(0,0,0)">on black</span>' +
+      "</div>";
+    const spans = parseHtmlClipboard(html, ansi16)!.flatMap((line) => line.spans);
+    expect(spans.find((span) => span.text === "on black")?.marks).toEqual({ bg: "black" });
+    expect(spans.find((span) => span.text === "plain ")?.marks).toEqual({});
+  });
+
+  /**
+   * The other half of the same rule, and the reason it is stated as "a container
+   * declared it" rather than "it is dark": a run wearing the very background its
+   * container already set is not saying anything, so it is discounted too — and
+   * markup that says nothing else at all falls through to plain text.
+   */
+  it("discounts a run's background when it only repeats the container's", () => {
+    const html =
+      '<div style="background-color: rgb(0,0,0); color: rgb(255,255,255)">' +
+      '<span style="background-color: rgb(0,0,0)">on black</span>' +
+      "</div>";
+    expect(parseHtmlClipboard(html, ansi16)).toBeNull();
+  });
+
+  describe("a docs site's code block", () => {
+    /**
+     * Chrome omits `display` when it serializes computed styles to the clipboard,
+     * so a `<span class="line">` made block by a stylesheet arrives inline and
+     * the whole block reads as one row. 42 lines came through as one.
+     */
+    it("puts the rows back using the plain flavour the same copy carries", () => {
+      const collapsed = parseHtmlClipboard(NUBJS_SHIKI_BLOCK, ansi16)!;
+      expect(collapsed).toHaveLength(1);
+
+      const lines = parseHtmlClipboard(NUBJS_SHIKI_BLOCK, ansi16, NUBJS_SHIKI_BLOCK_PLAIN)!;
+      const text = lines.map((line) => line.spans.map((span) => span.text).join(""));
+      expect(lines).toHaveLength(42);
+      // Character for character, indentation and box drawing included.
+      expect(text.join("\n")).toBe(NUBJS_SHIKI_BLOCK_PLAIN.replace(/\n+$/, ""));
+      expect(text[2]).toBe("  // ── runtime — file runs, scripts, and watch mode ──");
+    });
+
+    /** The page's own background, which is not something the author said. */
+    it("does not paint the page background onto every character", () => {
+      const lines = parseHtmlClipboard(NUBJS_SHIKI_BLOCK, ansi16, NUBJS_SHIKI_BLOCK_PLAIN)!;
+      const spans = lines.flatMap((line) => line.spans);
+      expect(spans.every((span) => span.marks.bg === undefined)).toBe(true);
+      // The syntax colouring is the part worth keeping, and it survives.
+      expect(spans.some((span) => span.marks.fg !== undefined)).toBe(true);
+    });
+
+    /**
+     * The repair only fires where the two flavours agree, so it cannot invent a
+     * break in markup that already knew where its rows were.
+     */
+    it("leaves markup alone when the plain flavour describes something else", () => {
+      const lines = parseHtmlClipboard(NUBJS_SHIKI_BLOCK, ansi16, "something else entirely")!;
+      expect(lines).toHaveLength(1);
+    });
+
+    it("changes nothing for a terminal whose rows already parse", () => {
+      const withPlain = parseHtmlClipboard(GHOSTTY_1_3_1, ansi16, GHOSTTY_1_3_1_PLAIN);
+      expect(withPlain).toEqual(parseHtmlClipboard(GHOSTTY_1_3_1, ansi16));
+    });
   });
 });
