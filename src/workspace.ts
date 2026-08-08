@@ -7,7 +7,7 @@ import {
   isFillId,
   normalizeFillId,
 } from "./export/background.ts";
-import { DEFAULT_FRAME, MAX_TITLE_LENGTH, type FrameSettings } from "./export/layout.ts";
+import { DEFAULT_FRAME, MAX_TITLE_LENGTH, aspectById, type FrameSettings } from "./export/layout.ts";
 
 /**
  * The document and every setting that decides what the image looks like.
@@ -55,6 +55,9 @@ export function sanitizeFrame(input: unknown): FrameSettings {
     title: typeof frame.title === "string" ? frame.title.slice(0, MAX_TITLE_LENGTH) : DEFAULT_FRAME.title,
     shadowStrength: clampedNumber(frame.shadowStrength, DEFAULT_FRAME.shadowStrength, 0, 100),
     columns: Math.round(clampedNumber(frame.columns, DEFAULT_FRAME.columns, 1, 400)),
+    // An unknown preset falls back to a free-sized image rather than to some
+    // other preset: a canvas nobody asked for would crop the picture.
+    aspect: aspectById(typeof frame.aspect === "string" ? frame.aspect : null)?.id ?? null,
   };
 }
 

@@ -775,6 +775,55 @@ input {
   font-size: 11px;
 }
 
+/* A control the current settings have taken away, at the same strength a
+   disabled button uses. The label dims with it: a bright label over a dead
+   slider reads as a broken control rather than a switched-off one. */
+.field--locked {
+  opacity: 0.45;
+}
+
+/*
+ * The aspect picker. A row of chips rather than the pill shape the style
+ * toolbar uses, because these are as wide as their longest label and a pill
+ * that size reads as a button rather than as one of a set.
+ *
+ * The extra space below is doing real work: this is the only picker among four
+ * sliders, and at the panel's own 10px field gap the chips sat close enough to
+ * the next slider's label to read as belonging to it.
+ */
+.aspect-row {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+
+.aspect-chip {
+  flex: 1;
+  padding: 5px 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-elev-2);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    color 100ms ease,
+    border-color 100ms ease;
+}
+
+.aspect-chip:not(.aspect-chip--active):hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+/* The pick ring, same as a theme card and a backdrop swatch. */
+.aspect-chip--active {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+  color: var(--text);
+}
+
 .text-input {
   width: 100%;
   padding: 6px 9px;

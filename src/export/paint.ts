@@ -189,9 +189,12 @@ export function buildOps(scene: Scene, opaqueBackdrop?: string): Op[] {
     y: terminal.y,
     width: terminal.width,
     height: terminal.height,
-    radius: frame.radius,
+    // The radius and the shadow are the two measurements that come from the
+    // settings rather than from `computeLayout`, so they are the two the layout
+    // could not scale on the way past.
+    radius: frame.radius * layout.contentScale,
     fill: theme.background,
-    shadow: resolveShadow(frame.shadowStrength),
+    shadow: resolveShadow(frame.shadowStrength, layout.contentScale),
   });
 
   ops.push({
@@ -200,7 +203,7 @@ export function buildOps(scene: Scene, opaqueBackdrop?: string): Op[] {
     y: terminal.y,
     width: terminal.width,
     height: terminal.height,
-    radius: frame.radius,
+    radius: frame.radius * layout.contentScale,
     children: [...chromeOps(layout, scene), ...bodyOps(layout)],
   });
 

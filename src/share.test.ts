@@ -13,7 +13,15 @@ const workspace: Workspace = {
   ],
   themeId: "dracula",
   backgroundId: "ember",
-  frame: { framePadding: 96, radius: 4, showChrome: true, title: "zsh — boron", shadowStrength: 30, columns: 64 },
+  frame: {
+    framePadding: 96,
+    radius: 4,
+    showChrome: true,
+    title: "zsh — boron",
+    shadowStrength: 30,
+    columns: 64,
+    aspect: null,
+  },
 };
 
 describe("the content parameter", () => {

@@ -23,10 +23,8 @@ import {
 } from "./export/index.ts";
 import {
   DEFAULT_FRAME,
-  FONT_SIZE,
   MAX_COLUMNS,
   MIN_COLUMNS,
-  TERMINAL_PADDING,
   computeLayout,
   trafficLights,
   type FrameSettings,
@@ -89,9 +87,14 @@ function loadPersisted(): Partial<Workspace> {
  * `MAX_LINES`, and fitting five thousand rows into a viewport would leave a
  * sliver nobody can read and nothing can be typed into — past this point the
  * block is better scrolled than shrunk. The floor is where the type stops being
- * legible: six pixels of a fifteen-pixel face.
+ * legible, in pixels of rendered type.
+ *
+ * Against `layout.fontSize` rather than `FONT_SIZE`, because those two stopped
+ * being the same number once a fixed canvas could scale the block: a card that
+ * enlarged the type would otherwise stop zooming out while the glyphs were still
+ * three times this tall.
  */
-const MIN_PREVIEW_SCALE = 6 / FONT_SIZE;
+const MIN_LEGIBLE_TYPE = 6;
 
 /**
  * The how-to legend under the block, one line per thing you can do.
@@ -219,7 +222,7 @@ export function App({ shared }: AppProps = {}) {
     // budget — no subtracting the stage's padding or the legend back out.
     const fit = () => {
       const scale = Math.min(1, element.clientWidth / layout.width, element.clientHeight / layout.height);
-      setPreviewScale(Math.max(MIN_PREVIEW_SCALE, scale));
+      setPreviewScale(Math.max(MIN_LEGIBLE_TYPE / layout.fontSize, scale));
     };
     fit();
     const observer = new ResizeObserver(fit);
@@ -392,7 +395,7 @@ export function App({ shared }: AppProps = {}) {
   }, []);
 
   const lights = layout ? trafficLights(layout, frame) : [];
-  const shadow = resolveShadow(frame.shadowStrength);
+  const shadow = resolveShadow(frame.shadowStrength, layout?.contentScale ?? 1);
 
   return (
     <div className="app">
@@ -468,11 +471,14 @@ export function App({ shared }: AppProps = {}) {
                   <div
                     className="terminal"
                     style={{
-                      left: frame.framePadding,
-                      top: frame.framePadding,
+                      // From the layout rather than from `framePadding`, which
+                      // stopped being where the block sits the moment a fixed
+                      // canvas could centre it.
+                      left: layout.terminal.x,
+                      top: layout.terminal.y,
                       width: layout.terminal.width,
                       height: layout.terminal.height,
-                      borderRadius: frame.radius,
+                      borderRadius: frame.radius * layout.contentScale,
                       background: theme.background,
                       boxShadow: shadow
                         ? `0 ${shadow.offsetY}px ${shadow.stdDeviation * 2}px rgba(0, 0, 0, ${shadow.opacity})`
@@ -503,7 +509,7 @@ export function App({ shared }: AppProps = {}) {
                             style={{
                               color: chromeTitleColor(theme),
                               fontFamily: FONT_FAMILY,
-                              fontSize: FONT_SIZE * CHROME_TITLE_SCALE,
+                              fontSize: layout.fontSize * CHROME_TITLE_SCALE,
                             }}
                           >
                             {frame.title}
@@ -521,10 +527,10 @@ export function App({ shared }: AppProps = {}) {
                       onChange={handleChange}
                       onSelectionChange={noteEditorChange}
                       theme={theme}
-                      fontSize={FONT_SIZE}
+                      fontSize={layout.fontSize}
                       lineHeight={layout.lineHeight}
                       halfLeading={layout.halfLeading}
-                      padding={TERMINAL_PADDING}
+                      padding={layout.terminalPadding}
                       width={layout.terminal.width}
                       wrapWidth={layout.wrapWidth}
                     />

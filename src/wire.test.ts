@@ -15,6 +15,7 @@ const frame = {
   title: "zsh — boron",
   shadowStrength: 30,
   columns: 64,
+  aspect: null,
 };
 
 function workspaceOf(document: LineElement[]): Workspace {
@@ -91,6 +92,20 @@ describe("toWire / fromWire", () => {
     const params = new URLSearchParams(toSearchParams(wire, "uXXXX").toString());
     expect(params.get(PARAM.backdrop)).toBe("#ff6600");
     expect(fromWire(fromSearchParams(params, wire.content))?.backgroundId).toBe("#ff6600");
+  });
+
+  it("carries an aspect through the wire and through a query string", () => {
+    const pinned = { ...workspaceOf([{ type: "line", children: [{ text: "x" }] }]), frame: { ...frame, aspect: "og" } };
+    const wire = toWire(pinned);
+    expect(wire.frame?.aspect).toBe("og");
+    expect(fromWire(wire)?.frame.aspect).toBe("og");
+    expect(fromWire(fromSearchParams(toSearchParams(wire, "u"), wire.content))?.frame.aspect).toBe("og");
+  });
+
+  it("says nothing about an aspect when there is none, and reads an unknown one as none", () => {
+    // Absent and "free-sized" are the same statement, so there is no id to write.
+    expect(toWire(workspaceOf([{ type: "line", children: [{ text: "x" }] }])).frame).not.toHaveProperty("aspect");
+    expect(fromWire({ version: 1, content: "x", frame: { aspect: "billboard" } })?.frame.aspect).toBeNull();
   });
 
   it("names nothing from the internal model in the payload", () => {
@@ -216,6 +231,7 @@ const CORPUS: readonly { name: string; payload: string; expect: Partial<Workspac
         title: "zsh",
         shadowStrength: 50,
         columns: 40,
+        aspect: null,
       },
     },
   },

@@ -10,7 +10,14 @@ import {
   type Background,
 } from "../export/background.ts";
 import { themedBackground } from "../export/backdrop.ts";
-import { MAX_COLUMNS, MAX_TITLE_LENGTH, MIN_COLUMNS, type FrameSettings } from "../export/layout.ts";
+import {
+  ASPECT_PRESETS,
+  MAX_COLUMNS,
+  MAX_TITLE_LENGTH,
+  MIN_COLUMNS,
+  aspectById,
+  type FrameSettings,
+} from "../export/layout.ts";
 
 /**
  * The eyedropper that marks the one swatch you *pick* rather than choose.
@@ -35,9 +42,19 @@ function Dropper() {
   );
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+function Field({
+  label,
+  hint,
+  locked,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  locked?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <label className="field">
+    <label className={`field${locked ? " field--locked" : ""}`}>
       <span className="field__label">
         {label}
         {hint ? <span className="field__hint">{hint}</span> : null}
@@ -54,12 +71,16 @@ interface SliderProps {
   max: number;
   step?: number;
   suffix?: string;
+  /** Why the control is off, shown in place of the value. Absent means it is on. */
+  lockedHint?: string | undefined;
   onChange: (value: number) => void;
 }
 
-function Slider({ label, value, min, max, step = 1, suffix = "px", onChange }: SliderProps) {
+function Slider({ label, value, min, max, step = 1, suffix = "px", lockedHint, onChange }: SliderProps) {
   return (
-    <Field label={label} hint={`${value}${suffix}`}>
+    // The hint says why rather than blanking to a dash: a dimmed control that
+    // does not account for itself reads as broken rather than as switched off.
+    <Field label={label} hint={lockedHint ?? `${value}${suffix}`} locked={lockedHint !== undefined}>
       <input
         type="range"
         name={label.toLowerCase().replace(/\s+/g, "-")}
@@ -67,6 +88,7 @@ function Slider({ label, value, min, max, step = 1, suffix = "px", onChange }: S
         max={max}
         step={step}
         value={value}
+        disabled={lockedHint !== undefined}
         onChange={(event) => onChange(Number(event.target.value))}
       />
     </Field>
@@ -112,6 +134,7 @@ export function Sidebar({
   frame,
   onFrameChange,
 }: SidebarProps) {
+  const aspect = aspectById(frame.aspect);
   const fill = background && isFillId(background.id) ? background.id : null;
   // What the colour input opens on: whatever is behind the block right now, so
   // the picker starts from the current backdrop rather than from a colour
@@ -234,6 +257,36 @@ export function Sidebar({
 
       <section className="panel">
         <h2 className="panel__title">Window</h2>
+        {/*
+          First, because it is the one control here that decides what the others
+          can still do: everything below sizes a block, and this decides whether
+          the image is sized by that block or fixed from the outside.
+        */}
+        <Field label="Aspect ratio" hint={aspect ? `${aspect.width} × ${aspect.height}` : "fits the content"}>
+          <div className="aspect-row">
+            {[null, ...ASPECT_PRESETS].map((candidate) => (
+              <button
+                key={candidate?.id ?? "free"}
+                type="button"
+                // The ring, not the accent: this is a set you pick one of, like
+                // a theme or a backdrop, and the accent means action here.
+                className={`aspect-chip${candidate?.id === frame.aspect ? " aspect-chip--active" : ""}`}
+                aria-pressed={candidate?.id === frame.aspect}
+                onClick={() => onFrameChange({ aspect: candidate?.id ?? null })}
+              >
+                {candidate?.label ?? "Free"}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Slider
+          label="Width"
+          value={frame.columns}
+          min={MIN_COLUMNS}
+          max={MAX_COLUMNS}
+          suffix=" cols"
+          onChange={(columns) => onFrameChange({ columns })}
+        />
         <Slider
           label="Corner radius"
           value={frame.radius}
@@ -242,27 +295,23 @@ export function Sidebar({
           onChange={(radius) => onFrameChange({ radius })}
         />
         <Slider
+          label="Padding"
+          value={frame.framePadding}
+          min={0}
+          max={140}
+          // A fixed canvas leaves whatever it leaves around the block, so there
+          // is nothing here to set. Width stays live and does the job people
+          // reach for this slider to do: fewer columns is a bigger block.
+          lockedHint={aspect ? "set by the aspect" : undefined}
+          onChange={(framePadding) => onFrameChange({ framePadding })}
+        />
+        <Slider
           label="Shadow"
           value={frame.shadowStrength}
           min={0}
           max={100}
           suffix="%"
           onChange={(shadowStrength) => onFrameChange({ shadowStrength })}
-        />
-        <Slider
-          label="Padding"
-          value={frame.framePadding}
-          min={0}
-          max={140}
-          onChange={(framePadding) => onFrameChange({ framePadding })}
-        />
-        <Slider
-          label="Width"
-          value={frame.columns}
-          min={MIN_COLUMNS}
-          max={MAX_COLUMNS}
-          suffix=" cols"
-          onChange={(columns) => onFrameChange({ columns })}
         />
       </section>
 

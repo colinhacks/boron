@@ -78,6 +78,16 @@ export interface WireFrameV1 {
   shadow?: number;
   /** How many columns wide the terminal is. Longer lines wrap to it. */
   columns?: number;
+  /**
+   * The canvas the image is pinned to — `og`, `square`, `wide` — or absent for
+   * one sized to its content.
+   *
+   * A name rather than a width and a height, for the same reason `columns` is a
+   * count: 1200×630 is this app's reading of "an Open Graph card" today, and a
+   * link that spelled the pixels out would keep pointing at those two numbers
+   * after the platforms moved. An unknown name reads back as no aspect at all.
+   */
+  aspect?: string;
 }
 
 /**
@@ -111,6 +121,10 @@ export function toWire(workspace: Workspace): WireWorkspaceV1 {
       title: workspace.frame.title,
       shadow: workspace.frame.shadowStrength,
       columns: workspace.frame.columns,
+      // The one field written only when set. Every other one is spelled out so a
+      // moved default cannot repaint a link, but there is no default to move
+      // here — absent and "no aspect" are the same statement.
+      ...(workspace.frame.aspect === null ? {} : { aspect: workspace.frame.aspect }),
     },
   };
 }
@@ -150,6 +164,7 @@ export function fromWire(input: unknown): Workspace | null {
       title: frame.title ?? DEFAULT_FRAME.title,
       shadowStrength: frame.shadow ?? DEFAULT_FRAME.shadowStrength,
       columns: frame.columns ?? DEFAULT_FRAME.columns,
+      aspect: frame.aspect ?? DEFAULT_FRAME.aspect,
     }),
   };
 }
@@ -182,6 +197,7 @@ export const PARAM = {
   title: "title",
   shadow: "shadow",
   columns: "columns",
+  aspect: "aspect",
 } as const;
 
 /**
@@ -208,6 +224,9 @@ export function toSearchParams(wire: WireWorkspaceV1, encodedContent: string): U
   params.set(PARAM.title, frame.title ?? "");
   params.set(PARAM.shadow, String(frame.shadow ?? DEFAULT_FRAME.shadowStrength));
   params.set(PARAM.columns, String(frame.columns ?? DEFAULT_FRAME.columns));
+  // Empty for a free-sized image, the way an absent theme is written empty:
+  // there is no default id to spell out, only the absence of one.
+  params.set(PARAM.aspect, frame.aspect ?? "");
   return params;
 }
 
@@ -242,6 +261,7 @@ export function fromSearchParams(params: URLSearchParams, decodedContent: string
       ...(params.get(PARAM.title) !== null ? { title: params.get(PARAM.title)! } : {}),
       ...(numberParam(params, PARAM.shadow) !== undefined ? { shadow: numberParam(params, PARAM.shadow)! } : {}),
       ...(numberParam(params, PARAM.columns) !== undefined ? { columns: numberParam(params, PARAM.columns)! } : {}),
+      ...(params.get(PARAM.aspect) ? { aspect: params.get(PARAM.aspect)! } : {}),
     },
   };
 }

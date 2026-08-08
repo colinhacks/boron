@@ -24,13 +24,23 @@ export const SHADOW = {
  * leave a wide grey haze at low settings, where what you want is a shadow that
  * tightens as it fades. Zero returns `null` so the editor, the canvas and the
  * SVG all take the same "draw nothing" branch rather than each deciding.
+ *
+ * `contentScale` is the block's own scale on a fixed canvas, and it multiplies
+ * the geometry but not the opacity — a shadow that kept its absolute blur under
+ * an enlarged block would read as a tighter shadow on a bigger window. It is
+ * applied here rather than by the renderers because a canvas shadow is exempt
+ * from the current transform while an SVG `feDropShadow` is not, so a transform
+ * would give the two exporters different pictures.
  */
-export function resolveShadow(strength: number): { offsetY: number; stdDeviation: number; opacity: number } | null {
+export function resolveShadow(
+  strength: number,
+  contentScale = 1,
+): { offsetY: number; stdDeviation: number; opacity: number } | null {
   const t = Math.min(100, Math.max(0, strength)) / 100;
   if (t === 0) return null;
   return {
-    offsetY: SHADOW.offsetY * t,
-    stdDeviation: SHADOW.stdDeviation * t,
+    offsetY: SHADOW.offsetY * t * contentScale,
+    stdDeviation: SHADOW.stdDeviation * t * contentScale,
     opacity: SHADOW.opacity * t,
   };
 }

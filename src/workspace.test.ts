@@ -35,6 +35,16 @@ describe("sanitizing", () => {
     expect(sanitizeFrame({ framePadding: Number.NaN }).framePadding).toBe(DEFAULT_FRAME.framePadding);
   });
 
+  it("keeps an aspect it recognizes and drops one it does not", () => {
+    expect(sanitizeFrame({ aspect: "og" }).aspect).toBe("og");
+    expect(sanitizeFrame({ aspect: "square" }).aspect).toBe("square");
+    // Not "fall back to another preset" — an unknown canvas has to become no
+    // canvas, or a stored workspace crops the picture to a shape nobody picked.
+    expect(sanitizeFrame({ aspect: "instagram-story" }).aspect).toBeNull();
+    expect(sanitizeFrame({ aspect: 3 }).aspect).toBeNull();
+    expect(sanitizeFrame({}).aspect).toBeNull();
+  });
+
   it("turns an unknown theme or backdrop into the default", () => {
     expect(sanitizeThemeId("no-such-theme")).toBe(DEFAULT_THEME.id);
     expect(sanitizeThemeId(12)).toBe(DEFAULT_THEME.id);
