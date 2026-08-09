@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { documentToRenderLines, type LineElement } from "./core/document.ts";
 import { toAnsi, toChalkSource, toPlainText } from "./core/serialize.ts";
 import { DEFAULT_THEME, themeById } from "./core/themes.ts";
@@ -97,16 +97,32 @@ function loadPersisted(): Partial<Workspace> {
 const MIN_LEGIBLE_TYPE = 6;
 
 /**
- * The how-to legend under the block, one line per thing you can do.
+ * The how-to legend under the block — the gestures you would not guess.
  *
- * A list rather than a sentence because these are unrelated gestures, and a
- * sentence that strings unrelated gestures together with "or" reads as one
- * choice between three things. It is also the shape that grows: the next trick
- * worth telling anyone about is another entry here, not a longer sentence.
+ * Only those. "Edit above, or paste from your terminal" used to lead it and is
+ * gone: a text box you can click into does not need a caption saying so, and a
+ * legend whose first line states the obvious teaches the reader to skip the one
+ * that does not.
+ *
+ * "Select a column" is gone with it, for being untrue rather than merely
+ * obvious. The gesture draws a *rectangle* — any rows, any span of cells within
+ * them (see `BoxSelection`) — and "column" promises a whole vertical strip you
+ * cannot actually ask for.
+ *
+ * A list rather than a sentence: these are unrelated gestures, and stringing
+ * them together with "or" reads as one choice between several. It is the shape
+ * that grows, too — the next trick worth telling anyone about is another entry
+ * here, not a longer sentence.
  */
-const LEGEND: readonly string[] = [
-  "Edit above, or paste from your terminal",
-  `${ALT_LABEL}-drag to select a column`,
+const LEGEND: readonly { id: string; text: ReactNode }[] = [
+  {
+    id: "box-select",
+    text: (
+      <>
+        Hold <kbd>{ALT_LABEL}</kbd> and drag to select a rectangle
+      </>
+    ),
+  },
 ];
 
 type CopyMode = "image" | "link" | "ansi" | "chalk" | "text";
@@ -566,8 +582,8 @@ export function App({ shared }: AppProps = {}) {
                     that is as tall as the window. It is positioned out of flow,
                     which is what keeps it off the measurement above. */}
                 <ul className="stage__legend">
-                  {LEGEND.map((entry) => (
-                    <li key={entry}>{entry}</li>
+                  {LEGEND.map(({ id, text }) => (
+                    <li key={id}>{text}</li>
                   ))}
                 </ul>
                 </div>

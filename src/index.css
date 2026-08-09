@@ -378,6 +378,36 @@ input {
   text-align: center;
 }
 
+/*
+ * A key you press, drawn as a key.
+ *
+ * Sized in `em` so it tracks whatever text it sits in rather than pinning
+ * itself to the legend's 12px — the next place a key gets named will not be
+ * this one. The vertical padding is deliberately lighter than the horizontal:
+ * a cap that is square around a single glyph reads as a button, and this is a
+ * keycap sitting inside a line of prose.
+ *
+ * It does grow the line it sits on — measured at 1.23px against the same
+ * sentence without it (14px → 15.23px), which is the cap's border and padding
+ * and cannot be had without them. That is why the legend spaces its entries
+ * with a flex `gap` rather than a margin: a gap is the same distance whatever
+ * height the items are, so the one line that names a key cannot open up a
+ * wider space beneath it than the lines that do not.
+ */
+kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0.1em 0.4em;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg-elev-2);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.92em;
+  line-height: 1;
+  text-align: center;
+}
+
 .frame-fit {
   position: relative;
   flex: none;
