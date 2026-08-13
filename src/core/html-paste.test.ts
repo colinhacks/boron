@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   GHOSTTY_1_3_1,
   GHOSTTY_1_3_1_PLAIN,
+  MONACO_VSCODE_EDITOR,
+  MONACO_VSCODE_EDITOR_PLAIN,
   NUBJS_SHIKI_BLOCK,
   NUBJS_SHIKI_BLOCK_PLAIN,
   TERMINAL_APP_2_15,
@@ -193,6 +195,24 @@ describe("parseHtmlClipboard", () => {
     // The addon hard-codes #000000 on #ffffff for the wrapper whatever the real
     // theme is, so the runs wearing no colour of their own must stay bare.
     expect(marksFor(" nub test")).toEqual({});
+  });
+
+  it("keeps a VS Code editor copy's syntax colors and drops its theme's own", () => {
+    const lines = parseHtmlClipboard(MONACO_VSCODE_EDITOR, ansi16, MONACO_VSCODE_EDITOR_PLAIN)!;
+    expect(lines.map((line) => line.spans.map((span) => span.text).join(""))).toEqual([
+      "const greet = (who: string) => {",
+      "  console.log(`hi ${who}`);",
+      "};",
+    ]);
+
+    const marksFor = (text: string) =>
+      lines.flatMap((line) => line.spans).find((span) => span.text === text)?.marks;
+    expect(marksFor("const")).toEqual({ fg: "#569cd6" });
+    expect(marksFor("`hi ")).toEqual({ fg: "#ce9178" });
+    // `#d4d4d4` on `#1e1e1e` is the theme talking, not the code — every token
+    // states it and the wrapper is where it comes from.
+    expect(marksFor(" greet ")).toEqual({});
+    expect(lines.flatMap((line) => line.spans).some((span) => span.marks.bg !== undefined)).toBe(false);
   });
 
   it("reads styling out of a <style> block, not just the style attribute", () => {

@@ -211,3 +211,21 @@ export const VITEPRESS_SHIKI_DARK_PLAIN = "npm add -D vitepress@next";
  * as a wrapper either way.
  */
 export const VSCODE_XTERM_SERIALIZE = "<html><body><!--StartFragment--><pre><div style='color: #000000; background-color: #ffffff; font-family: courier-new, courier, monospace; font-size: 15px;'><div><span></span><span style='color: #4e9a06;'>➜</span><span> </span><span style='color: #06989a;'>boron</span><span> </span><span style='color: #3465a4;'>git:(</span><span style='color: #cc0000;'>main</span><span style='color: #3465a4;'>)</span><span> nub test             </span></div><div><span></span><span style='font-weight: bold;'>PASS</span><span> </span><span style='color: #555753;'>ansi.test.ts</span><span>                       </span></div><div><span></span><span style='color: #eeeeec; background-color: #cc0000;'> FAIL </span><span> one assertion                    </span></div><div><span></span><span style='text-decoration: underline;'>http://localhost:5173/</span><span>                  </span></div><div><span></span><span style='opacity: 0.5;'>dim output</span><span>                              </span></div><div><span>                                        </span></div></div></pre><!--EndFragment--></body></html>";
+
+/**
+ * The VS Code editor — Monaco's `copyWithSyntaxHighlighting`, captured off the
+ * `copy` event on typescriptlang.org/play. Monaco *is* the VS Code editor, and
+ * this is the flavour it writes beside `text/plain` on an ordinary Cmd-C, so it
+ * is what a paste from VS Code or Cursor arrives as.
+ *
+ * The shape a terminal never uses: one wrapper carrying the theme's own
+ * foreground and background, one `<div>` per line inside it, one `<span>` per
+ * token, and a trailing `<br>`. Every token states a colour, including the ones
+ * merely wearing the theme's default — so without `findRootColors` discounting
+ * that wrapper, every unhighlighted character would arrive carrying `#d4d4d4` on
+ * `#1e1e1e`.
+ */
+export const MONACO_VSCODE_EDITOR = "<div style=\"color: #d4d4d4;background-color: #1e1e1e;font-family: var(--code-font), Menlo, Monaco, 'Courier New', monospace;font-weight: normal;font-size: 12px;line-height: 18px;white-space: pre;\"><div><span style=\"color: #569cd6;\">const</span><span style=\"color: #d4d4d4;\"> greet </span><span style=\"color: #dcdcdc;\">=</span><span style=\"color: #d4d4d4;\"> </span><span style=\"color: #dcdcdc;\">(</span><span style=\"color: #d4d4d4;\">who</span><span style=\"color: #dcdcdc;\">:</span><span style=\"color: #d4d4d4;\"> </span><span style=\"color: #569cd6;\">string</span><span style=\"color: #dcdcdc;\">)</span><span style=\"color: #d4d4d4;\"> </span><span style=\"color: #dcdcdc;\">=&gt;</span><span style=\"color: #d4d4d4;\"> </span><span style=\"color: #dcdcdc;\">{</span></div><div><span style=\"color: #d4d4d4;\">  console</span><span style=\"color: #dcdcdc;\">.</span><span style=\"color: #d4d4d4;\">log</span><span style=\"color: #dcdcdc;\">(</span><span style=\"color: #ce9178;\">`hi </span><span style=\"color: #dcdcdc;\">${</span><span style=\"color: #d4d4d4;\">who</span><span style=\"color: #dcdcdc;\">}</span><span style=\"color: #ce9178;\">`</span><span style=\"color: #dcdcdc;\">);</span></div><div><span style=\"color: #dcdcdc;\">};</span></div><br></div>";
+
+/** The same copy's `text/plain`. */
+export const MONACO_VSCODE_EDITOR_PLAIN = "const greet = (who: string) => {\n  console.log(`hi ${who}`);\n};\n";
