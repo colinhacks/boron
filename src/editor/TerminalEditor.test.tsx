@@ -1,4 +1,5 @@
 import { Slice } from "prosemirror-model";
+import { TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -139,6 +140,38 @@ describe("pasting into the editor", () => {
 
     expect(document().length).toBe(MAX_LINES);
     expect(sanitizeDocument(document())).not.toBeNull();
+  });
+});
+
+describe("Tab", () => {
+  /**
+   * The ordinary path only. The bug this sits next to is the *rectangle* path —
+   * `collapseBox` dispatches, which left the state the command was handed one
+   * transaction behind, so the spaces went back to the caret the rectangle had
+   * replaced. Covering that needs a live box, and a box needs the provider stack
+   * plus a measured character grid, which jsdom has no layout to give. Fixed by
+   * reading `view.state` instead; unpinned.
+   */
+  it("puts two spaces at the caret rather than moving focus out of the block", () => {
+    const { handle, document } = mount();
+    const view = handle.view()!;
+
+    act(() => {
+      view.dom.dispatchEvent(pasteEvent({ "text/plain": "alpha\nbravo" }));
+    });
+    // Caret at the very start, then Tab.
+    act(() => {
+      view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(1))));
+    });
+    act(() => {
+      view.someProp("handleKeyDown", (f) =>
+        f(view, new KeyboardEvent("keydown", { key: "Tab", keyCode: 9, bubbles: true, cancelable: true })),
+      );
+    });
+
+    // Two spaces at the caret — a terminal has no tab stop to land on, and moving
+    // focus out of the block mid-edit is worse than inserting the spaces meant.
+    expect(document().map(lineText)).toEqual(["  alpha", "bravo"]);
   });
 });
 

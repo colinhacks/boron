@@ -295,8 +295,11 @@ export function boxText(lines: readonly LineElement[], columns: number, box: Box
  *
  * This is what makes a column copy worth having in a tool about color: the plain
  * flavour alone would hand back a monochrome column from an editor whose whole
- * point is that the column is green. Pasted back into Boron this round-trips
- * through the same sanitizer a share link does — see `withTerminal`.
+ * point is that the column is green. Pasted back into Boron it is spotted by the
+ * `data-pm-slice` stamp and read through the schema's own `parseDOM` rather than
+ * the terminal-HTML parser — so the marks arrive exactly as they left, and a
+ * colour no escape code could express is dropped by the `fg`/`bg` `getAttrs`
+ * instead of being re-derived from a rendered hex. See `paste.ts`.
  */
 export function boxFragment(
   lines: readonly LineElement[],

@@ -47,7 +47,7 @@ The wire names are deliberately not the internal ones: `padding` not `framePaddi
 
 Two lossiness bugs that ANSI-as-a-format would otherwise have had, both fixed and both pinned by a test: `parseAnsi` gained a `trimTrailing` option, because trailing spaces take up cells and dropping them moves where a long line wraps; and the content is serialized from raw marks rather than through the `$`-prompt heuristic, which would otherwise freeze one reading of the document.
 
-What is still **not** built: the base64/URL layer on top. That is now a small wrapper, and it is a separate decision.
+The base64/URL layer on top is built too, in [src/share.ts](../src/share.ts): `buildShareUrl` behind "Copy link" in the export button, and `consumeSharedWorkspace` on load. So links ship, and this page is the account of why the *first* attempt did not.
 
 ## Options that were considered
 
