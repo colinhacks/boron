@@ -54,7 +54,7 @@ There are therefore two parsers, and `parseClipboard` in `paste.ts` tries HTML f
 
 Two consequences worth knowing. Rich-text copy is often **off by default**: iTerm2 needs Cmd-Opt-C rather than Cmd-C, and Windows Terminal needs `copyFormatting` set — its default is plain text only. And a terminal that hands us colours may state them per *row* rather than per *run*; `defaultColors` in `html-paste.ts` is what stops those rows from painting a colour onto every character.
 
-If you need to support another terminal, capture its real bytes and add them there rather than writing markup you believe it emits.
+If you need to support another terminal, capture its real bytes and add them there rather than writing markup you believe it emits. [wiki/clipboard-sources.md](wiki/clipboard-sources.md) maps what every terminal and editor worth naming actually writes — which of them offer a rich flavour at all, which need a setting turned on first, and which quirks have already cost something. Read it before you start; it marks which rows are captured bytes and which are only somebody's reading of the source.
 
 ## Brand assets
 

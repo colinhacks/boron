@@ -215,6 +215,27 @@ describe("parseHtmlClipboard", () => {
     expect(lines.flatMap((line) => line.spans).some((span) => span.marks.bg !== undefined)).toBe(false);
   });
 
+  /*
+   * Two shapes belonging to terminals there is no fixture for, because capturing
+   * one means a copy on the machine it runs on. Each is a single feature rather
+   * than an invented payload — the point is that the rule holds, not that this
+   * markup is what the terminal emits byte for byte.
+   */
+
+  it("reads a foreground off a <font color> attribute, where VTE puts it", () => {
+    // GNOME Terminal and Ptyxis state the foreground as an attribute and the
+    // background as a separate wrapping span, so a style-only walk loses every
+    // foreground they send.
+    expect(shape('<div><font color="#0dbc79">ok</font></div>')).toEqual([[["ok", { fg: "green" }]]]);
+  });
+
+  it("reads uppercase tags, which is how Windows Terminal writes them", () => {
+    expect(shape('<SPAN STYLE="color:#cd3131">a</SPAN><BR><SPAN STYLE="color:#0dbc79">b</SPAN>')).toEqual([
+      [["a", { fg: "red" }]],
+      [["b", { fg: "green" }]],
+    ]);
+  });
+
   it("reads styling out of a <style> block, not just the style attribute", () => {
     const html = '<style>.a { color: #cd3131 } .b { font-weight: bold }</style>' +
       '<div><span class="a">r</span><span class="b">b</span></div>';
