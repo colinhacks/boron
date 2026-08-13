@@ -38,7 +38,10 @@ export function parseClipboard(data: DataTransfer, ansi16: readonly string[]): P
   if (text && hasAnsi(text)) return parseAnsi(text);
 
   if (html) {
-    const parsed = parseHtmlClipboard(html, ansi16);
+    // The plain flavour rides along because the same copy states its rows twice
+    // and only one of the two survives a clipboard intact — see
+    // `relineFromPlainText`. It decides nothing about styling.
+    const parsed = parseHtmlClipboard(html, ansi16, text);
     if (parsed) return parsed;
   }
 

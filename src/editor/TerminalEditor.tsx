@@ -11,6 +11,7 @@ import { FONT_FAMILY } from "../export/fonts.ts";
 import { boxFragment, boxText, cellAt, deleteBox } from "./box.ts";
 import { useBoxSelection } from "./BoxSelection.tsx";
 import { refreshStyles, styleKey, stylePlugin } from "./decorations.ts";
+import { pastePlugin } from "./paste.ts";
 import { documentToNode, nodeToDocument, terminalSchema } from "./schema.ts";
 import { useFormatting } from "./useFormatting.ts";
 
@@ -115,6 +116,10 @@ export function TerminalSurface({
     const state = EditorState.create({
       doc: documentToNode(initialDocument),
       plugins: [
+        // Ahead of everything else: a paste has to be read as terminal output
+        // before ProseMirror parses the markup itself, which would take a
+        // terminal's per-run elements for one line each.
+        pastePlugin(() => latest.current.ansi16()),
         history(),
         keymap({
           "Mod-z": undo,
