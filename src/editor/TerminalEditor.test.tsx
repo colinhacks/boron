@@ -1,8 +1,10 @@
+import { Slice } from "prosemirror-model";
+import type { EditorView } from "prosemirror-view";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { GHOSTTY_1_3_1, GHOSTTY_1_3_1_PLAIN } from "../core/clipboard-fixtures.ts";
-import { emptyDocument, lineText, type TerminalDocument } from "../core/document.ts";
+import { MAX_LINES, emptyDocument, lineText, sanitizeDocument, type TerminalDocument } from "../core/document.ts";
 import { DEFAULT_THEME } from "../core/themes.ts";
 import { TerminalSurface, type TerminalHandle } from "./TerminalEditor.tsx";
 
@@ -68,6 +70,22 @@ function pasteEvent(flavours: Record<string, string>): Event {
   return event;
 }
 
+/**
+ * A drop of the same. jsdom has no `DragEvent` either, and no layout — so
+ * `posAtCoords` is stubbed to the end of the document, which is where a drop onto
+ * an empty block lands anyway.
+ */
+function dropEvent(view: EditorView, flavours: Record<string, string>): Event {
+  const event = new Event("drop", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "dataTransfer", {
+    value: { getData: (type: string) => flavours[type] ?? "", types: Object.keys(flavours), files: [] },
+  });
+  Object.defineProperty(event, "clientX", { value: 0 });
+  Object.defineProperty(event, "clientY", { value: 0 });
+  view.posAtCoords = () => ({ pos: view.state.doc.content.size, inside: -1 });
+  return event;
+}
+
 describe("pasting into the editor", () => {
   it("reads a terminal's rich text as rows and runs rather than as markup", () => {
     const { handle, document } = mount();
@@ -105,5 +123,59 @@ describe("pasting into the editor", () => {
 
     expect(document().map(lineText)).toEqual(["ok"]);
     expect(document()[0]!.children).toEqual([{ text: "ok", fg: "green" }]);
+  });
+
+  it("stops at the line ceiling rather than saving a document that will not load", () => {
+    // `sanitizeDocument` refuses more than MAX_LINES, and it is the reader on the
+    // load path — so a paste past the ceiling is not a big document, it is a
+    // document thrown away whole the next time the app opens.
+    const { handle, document } = mount();
+    const view = handle.view()!;
+    const huge = Array.from({ length: MAX_LINES + 500 }, (_, i) => `line ${i}`).join("\n");
+
+    act(() => {
+      view.dom.dispatchEvent(pasteEvent({ "text/plain": huge }));
+    });
+
+    expect(document().length).toBe(MAX_LINES);
+    expect(sanitizeDocument(document())).not.toBeNull();
+  });
+});
+
+describe("dropping into the editor", () => {
+  it("reads dropped terminal output through the same parsers a paste uses", () => {
+    // ProseMirror never consults `handlePaste` for a drop, so without its own
+    // prop the flavour priority is skipped and Ghostty's per-run `<div>`s arrive
+    // as one line each.
+    const { handle, document } = mount();
+    const view = handle.view()!;
+
+    act(() => {
+      view.dom.dispatchEvent(dropEvent(view, { "text/html": GHOSTTY_1_3_1, "text/plain": GHOSTTY_1_3_1_PLAIN }));
+    });
+
+    const lines = document().map(lineText);
+    expect(lines).toContain("FRAY v0.1.5  ready in 2.9s");
+    expect(lines).toContain("256color truecolor trailing-plain");
+    const fray = document().flatMap((line) => line.children).find((child) => child.text === "FRAY");
+    expect(fray).toEqual({ text: "FRAY", fg: "#b294bb", bold: true });
+  });
+
+  it("leaves a drag that started inside the editor to ProseMirror", () => {
+    // An internal drag carries a schema-validated slice and its own move
+    // semantics; re-deriving it from rendered colours would lose the difference
+    // between `green` and one theme's idea of green.
+    const { handle, document } = mount();
+    const view = handle.view()!;
+    view.dragging = { slice: Slice.empty, move: false };
+
+    act(() => {
+      view.dom.dispatchEvent(dropEvent(view, { "text/plain": "dropped" }));
+    });
+
+    // ProseMirror moves its own empty slice and nothing else. Had the terminal
+    // parsers run, the `text/plain` riding along on the event would be in there.
+    expect(document().map(lineText).join("\n")).not.toContain("dropped");
+    view.dragging = null;
   });
 });

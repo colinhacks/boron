@@ -1,8 +1,7 @@
 import { Fragment, Slice } from "prosemirror-model";
 import { Plugin } from "prosemirror-state";
-import type { EditorView } from "prosemirror-view";
 import { hasAnsi, parseAnsi, type ParsedLine } from "../core/ansi.ts";
-import { parsedLinesToDocument } from "../core/document.ts";
+import { MAX_LINES, parsedLinesToDocument } from "../core/document.ts";
 import { parseHtmlClipboard } from "../core/html-paste.ts";
 import { parseRtfClipboard } from "../core/rtf-paste.ts";
 import { documentToNode } from "./schema.ts";
@@ -57,13 +56,19 @@ export function parseClipboard(data: DataTransfer, ansi16: readonly string[]): P
   return null;
 }
 
-/** Replace the selection with parsed lines, splicing into the current line. */
-function insertParsed(view: EditorView, lines: readonly ParsedLine[]): void {
-  const node = documentToNode(parsedLinesToDocument(lines));
+/**
+ * The parsed lines as a slice, cut to the document ceiling.
+ *
+ * `sanitizeDocument` refuses a document longer than `MAX_LINES`, and that is the
+ * reader on the *load* path — so a paste that sails past it is not merely large,
+ * it is a document that will be thrown away whole the next time the app opens.
+ * Losing the tail of an enormous paste is the smaller loss.
+ */
+function sliceFor(lines: readonly ParsedLine[]): Slice {
+  const node = documentToNode(parsedLinesToDocument(lines.slice(0, MAX_LINES)));
   // openStart/openEnd of 1 means the first and last pasted lines merge with the
   // text either side of the cursor rather than arriving as whole new lines.
-  const slice = new Slice(Fragment.from(node.content), 1, 1);
-  view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
+  return new Slice(Fragment.from(node.content), 1, 1);
 }
 
 export function pastePlugin(ansi16: () => readonly string[]): Plugin {
@@ -78,9 +83,50 @@ export function pastePlugin(ansi16: () => readonly string[]): Plugin {
         if (!lines) return false;
 
         event.preventDefault();
-        insertParsed(view, lines);
+        view.dispatch(view.state.tr.replaceSelection(sliceFor(lines)).scrollIntoView());
         return true;
       },
+
+      /**
+       * A drop is a paste that arrived by hand, and ProseMirror routes it through
+       * a different prop — `handlePaste` is never consulted for one. Without this
+       * the flavour priority above is skipped and terminal output dragged in from
+       * Ghostty or Terminal.app arrives as ProseMirror-parsed markup, which is one
+       * line per styled run.
+       *
+       * A drag that started *inside* the editor is left alone: it carries a
+       * schema-validated slice and its own move semantics, and re-deriving it from
+       * rendered colours would lose the difference between `green` and one theme's
+       * idea of green — the same reason `isOwnClipboardHtml` exists.
+       */
+      handleDrop(view, event) {
+        if (view.dragging) return false;
+        const data = event.dataTransfer;
+        if (!data) return false;
+        if (isOwnClipboardHtml(data.getData("text/html"))) return false;
+
+        const lines = parseClipboard(data, ansi16());
+        if (!lines) return false;
+
+        const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
+        if (!at) return false;
+
+        event.preventDefault();
+        view.dispatch(view.state.tr.replace(at.pos, at.pos, sliceFor(lines)).scrollIntoView());
+        view.focus();
+        return true;
+      },
+    },
+
+    /**
+     * The ceiling again, this time as an invariant rather than a cut. Two pastes
+     * of three thousand lines each clear `sliceFor` individually and still leave a
+     * document `sanitizeDocument` will reject, so the guard has to be on the
+     * document rather than on the input.
+     */
+    filterTransaction(transaction, state) {
+      if (!transaction.docChanged) return true;
+      return transaction.doc.childCount <= Math.max(MAX_LINES, state.doc.childCount);
     },
   });
 }

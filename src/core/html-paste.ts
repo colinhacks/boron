@@ -372,6 +372,40 @@ function defaultColors(lines: readonly Run[][]): { color: string | null; backgro
 }
 
 /**
+ * The one background every run states, if they all state the same one.
+ *
+ * Chrome writes *computed* styles into the clipboard, so a code block copied off
+ * a web page arrives as a flat run of sibling `<span>`s that each restate the
+ * block's background. There is no container for `findRootColors` to read it off
+ * and no row declaring it for `defaultColors` to count, so both of the existing
+ * defences miss it and the paste paints another site's backdrop onto every
+ * character. A VitePress block came through with `bg` on all four of its runs.
+ *
+ * Backgrounds only. A terminal uses one to mark out a *part* of its output — a
+ * badge, a diff hunk, a selection — so one covering every character is a surface
+ * rather than something the source said. A foreground is how a terminal says
+ * anything at all, and two adjacent runs sharing one is ordinary, so the same
+ * reasoning does not carry over to it.
+ *
+ * A lone run is left alone, having nothing to be uniform against. That is the
+ * ` FAIL ` badge copied on its own, which is all background and means it.
+ */
+function uniformBackground(lines: readonly Run[][]): string | null {
+  let background: string | null = null;
+  let runs = 0;
+  for (const line of lines) {
+    for (const run of line) {
+      if (run.text.length === 0) continue;
+      if (!run.style.background) return null;
+      if (background !== null && run.style.background !== background) return null;
+      background = run.style.background;
+      runs++;
+    }
+  }
+  return runs > 1 ? background : null;
+}
+
+/**
  * The rows the markup lost, taken from the plain-text flavour.
  *
  * A clipboard states its rows twice — once as markup, once as newlines in
@@ -426,6 +460,34 @@ function relineFromPlainText(lines: readonly ParsedLine[], plain: string): reado
 }
 
 /**
+ * Drop the padding a terminal wrote out to its window edge.
+ *
+ * `parseAnsi` already does this — "a terminal pads its rows out to the window and
+ * none of it is content" — and the rich-text flavour needs it for the same reason
+ * and by the same rule. xterm.js is the terminal inside VS Code, Cursor, Hyper
+ * and Tabby, and its serializer pads every row out to the full column count, so
+ * without this a five-line copy arrives a hundred characters wide and drags the
+ * block's width with it.
+ *
+ * A trailing space wearing a background or an underline is not padding — the
+ * terminal is drawing with it — so it stays, which is the same line `parseAnsi`
+ * draws in `isTrimmableCell`.
+ */
+function trimTrailingPadding(line: ParsedLine): ParsedLine {
+  const spans = line.spans.map((span) => ({ ...span }));
+  while (spans.length > 0) {
+    const span = spans[spans.length - 1]!;
+    if (span.marks.bg !== undefined || span.marks.underline) break;
+    const trimmed = span.text.replace(/ +$/, "");
+    if (trimmed === span.text) break;
+    span.text = trimmed;
+    if (trimmed.length > 0) break;
+    spans.pop();
+  }
+  return { spans: spans.length > 0 ? spans : [{ text: "", marks: {} }] };
+}
+
+/**
  * Turn a terminal's rich-text clipboard flavor into styled lines.
  *
  * Colors are mapped back onto named palette entries where they match a known
@@ -472,7 +534,7 @@ export function parseHtmlClipboard(
   const fallback = defaultColors(collector.lines);
   const defaults: Defaults = {
     color: root.color ?? fallback.color,
-    background: root.background ?? fallback.background,
+    background: root.background ?? fallback.background ?? uniformBackground(collector.lines),
     ansi16,
   };
 
@@ -480,7 +542,9 @@ export function parseHtmlClipboard(
     spans: runs.length > 0 ? runs.map((run) => toSpan(run, defaults)) : [{ text: "", marks: {} }],
   }));
 
-  const lines = [...(plain ? relineFromPlainText(parsedLines, plain) : parsedLines)];
+  // After the relining, which needs the spans to still say exactly what the
+  // plain flavour says before it will cut on its offsets.
+  const lines = (plain ? relineFromPlainText(parsedLines, plain) : parsedLines).map(trimTrailingPadding);
   while (lines.length > 0 && lines[lines.length - 1]!.spans.every((span) => span.text.trim() === "")) {
     lines.pop();
   }

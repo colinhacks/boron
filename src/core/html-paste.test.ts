@@ -5,6 +5,9 @@ import {
   NUBJS_SHIKI_BLOCK,
   NUBJS_SHIKI_BLOCK_PLAIN,
   TERMINAL_APP_2_15,
+  VITEPRESS_SHIKI_DARK,
+  VITEPRESS_SHIKI_DARK_PLAIN,
+  VSCODE_XTERM_SERIALIZE,
 } from "./clipboard-fixtures.ts";
 import { parseHtmlClipboard } from "./html-paste.ts";
 import { DEFAULT_THEME } from "./themes.ts";
@@ -136,6 +139,60 @@ describe("parseHtmlClipboard", () => {
     expect(marksFor("italic")).toEqual({ italic: true });
     expect(marksFor("strike")).toEqual({ strikethrough: true });
     expect(marksFor(" trailing-plain")).toEqual({});
+  });
+
+  it("discounts a backdrop every run restates, having nothing to read it off", () => {
+    // Chrome writes computed styles, so a code block copied off a dark docs site
+    // arrives as sibling runs that each carry the page's background. Neither the
+    // wrapper nor the row is there to discount it, and pasting it painted a black
+    // rectangle over the theme.
+    const lines = parseHtmlClipboard(VITEPRESS_SHIKI_DARK, ansi16, VITEPRESS_SHIKI_DARK_PLAIN)!;
+    const spans = lines.flatMap((line) => line.spans);
+    expect(spans.map((span) => span.text).join("")).toBe(VITEPRESS_SHIKI_DARK_PLAIN);
+    expect(spans.some((span) => span.marks.bg !== undefined)).toBe(false);
+    // The syntax colors are what the source actually said, and they survive.
+    expect(spans.map((span) => span.marks.fg)).toEqual(["blueBright", "blueBright", "#79b8ff", "blueBright"]);
+  });
+
+  it("keeps a background that only part of the text wears", () => {
+    // The rule above must not reach a badge: one run of many wearing a colour is
+    // the terminal drawing with it, not a surface underneath everything.
+    const html = '<div><span style="background:#cc0000;color:#fff"> FAIL </span><span> one assertion</span></div>';
+    expect(shape(html)).toEqual([[[" FAIL ", { fg: "whiteBright", bg: "red" }], [" one assertion", {}]]]);
+  });
+
+  it("keeps the background of a lone run, which has nothing to be uniform against", () => {
+    expect(shape('<div><span style="background:#cc0000;color:#fff"> FAIL </span></div>')).toEqual([
+      [[" FAIL ", { fg: "whiteBright", bg: "red" }]],
+    ]);
+  });
+
+  it("drops the row padding xterm.js writes, the way parseAnsi does", () => {
+    // The terminal inside VS Code, Cursor, Hyper and Tabby. Its serializer pads
+    // every row out to the column count, and none of that is content.
+    const lines = parseHtmlClipboard(VSCODE_XTERM_SERIALIZE, ansi16)!;
+    expect(lines.map((line) => line.spans.map((span) => span.text).join(""))).toEqual([
+      "➜ boron git:(main) nub test",
+      "PASS ansi.test.ts",
+      " FAIL  one assertion",
+      "http://localhost:5173/",
+      "dim output",
+    ]);
+  });
+
+  it("reads every mark xterm.js encodes, including dim as opacity", () => {
+    const lines = parseHtmlClipboard(VSCODE_XTERM_SERIALIZE, ansi16)!;
+    const marksFor = (text: string) =>
+      lines.flatMap((line) => line.spans).find((span) => span.text === text)?.marks;
+
+    expect(marksFor("PASS")).toEqual({ bold: true });
+    expect(marksFor("main")).toEqual({ fg: "red" });
+    expect(marksFor(" FAIL ")).toEqual({ fg: "whiteBright", bg: "red" });
+    expect(marksFor("http://localhost:5173/")).toEqual({ underline: true });
+    expect(marksFor("dim output")).toEqual({ dim: true });
+    // The addon hard-codes #000000 on #ffffff for the wrapper whatever the real
+    // theme is, so the runs wearing no colour of their own must stay bare.
+    expect(marksFor(" nub test")).toEqual({});
   });
 
   it("reads styling out of a <style> block, not just the style attribute", () => {

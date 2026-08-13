@@ -176,3 +176,38 @@ export const NUBJS_SHIKI_BLOCK = "<meta charset='utf-8'><span class=\"line\" sty
  * rows are, and `relineFromPlainText` cuts the markup's runs back onto it.
  */
 export const NUBJS_SHIKI_BLOCK_PLAIN = "{\n  \"$schema\": \"https://nubjs.com/schema/latest.json\",\n  // \u2500\u2500 runtime \u2014 file runs, scripts, and watch mode \u2500\u2500\n  // relative paths or bare specifiers, loaded in order\n  \"preload\": [\"./setup.ts\", \"tsx/esm\"],\n  // any flag your Node accepts in NODE_OPTIONS\n  \"nodeOptions\": [\"--enable-source-maps\"],\n  // passed on the command line, so the full V8 set\n  \"v8Flags\": [\"--expose-gc\"],\n  // true = disable every Nub augmentation, keeping the version pin\n  \"nodeCompat\": false,\n  // true = the default .env cascade\n  // false = load nothing\n  // a path or an array of paths to load\n  // \"envFile\": \".env.${APP_ENV}\",\n  \"envFile\": [\".env\", \".env.local\"],\n  // text | jsonc | json5 | toml | yaml | ts | tsx | jsx\n  \"loader\": { \".graphql\": \"text\" },\n  \"conditions\": [\"development\"],   // matched ahead of \"default\"\n  // read for JSX, decorators, and path mapping \u2014 not type checking\n  \"tsconfig\": \"./tsconfig.runtime.json\",\n  // warn | error | true | false; true is warn\n  \"verifyDeps\": \"warn\",\n  // \u2500\u2500 installs \u2014 Nub-identity projects only \u2500\u2500\n  \"install\": {\n    // \"global-virtual-store\" (default) | \"isolated\" | \"hoisted\" | \"pnp\"\n    // \"pnp\" is rejected on install; the object form adds one knob:\n    //   global-virtual-store \u2192 \"eject\": string[]\n    //   isolated \u2192 \"hoist\": boolean | string[]\n    \"linker\": { \"strategy\": \"global-virtual-store\", \"eject\": [\"electron\"] },\n    \"publicHoist\": [\"@types/*\"],     // name patterns; [\"*\"] for all; any layout\n    // <integer><s|m|h|d|w>; a bare number is rejected\n    \"minimumReleaseAge\": \"3d\",\n    \"minimumReleaseAgeExclude\": [\"@company/*\"]\n  },\n  // \u2500\u2500 temporary package runs \u2014 global file only \u2500\u2500\n  // reaching the registry is a decision about your machine, not one\n  // checkout, so a project nub.jsonc carrying this is an error.\n  \"dlx\": {\n    \"consent\": \"prompt\"            // prompt | never\n  }\n}";
+
+/**
+ * VitePress (Shiki, dark theme), copied out of Chrome on vitepress.dev.
+ *
+ * Not a terminal, and that is the point: a code block is the other place
+ * terminal-shaped text gets copied from, and Chrome writes `text/html` for it by
+ * serializing the selection's *computed* styles. So there is no wrapper and no
+ * row — just sibling runs that each restate the block's own
+ * `background-color: rgb(22, 22, 24)`. Both of the defences against a pasted
+ * backdrop look for something to read it off and find nothing here, which is what
+ * `uniformBackground` is for.
+ */
+export const VITEPRESS_SHIKI_DARK =
+  "<span style=\"box-sizing: border-box; border: 0px solid; margin: 0px; padding: 0px; unicode-bidi: isolate; color: rgb(158, 203, 255); text-decoration: none; font-weight: 400; font-family: ui-monospace, Menlo, Monaco, Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace; font-size: 14px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: pre; background-color: rgb(22, 22, 24); --shiki-light: #032F62; --shiki-dark: #9ECBFF;\">npm</span>" +
+  "<span style=\"box-sizing: border-box; border: 0px solid; margin: 0px; padding: 0px; unicode-bidi: isolate; color: rgb(158, 203, 255); text-decoration: none; font-weight: 400; font-family: ui-monospace, Menlo, Monaco, Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace; font-size: 14px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: pre; background-color: rgb(22, 22, 24); --shiki-light: #032F62; --shiki-dark: #9ECBFF;\"> add</span>" +
+  "<span style=\"box-sizing: border-box; border: 0px solid; margin: 0px; padding: 0px; unicode-bidi: isolate; color: rgb(121, 184, 255); text-decoration: none; font-weight: 400; font-family: ui-monospace, Menlo, Monaco, Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace; font-size: 14px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: pre; background-color: rgb(22, 22, 24); --shiki-light: #005CC5; --shiki-dark: #79B8FF;\"> -D</span>" +
+  "<span style=\"box-sizing: border-box; border: 0px solid; margin: 0px; padding: 0px; unicode-bidi: isolate; color: rgb(158, 203, 255); text-decoration: none; font-weight: 400; font-family: ui-monospace, Menlo, Monaco, Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace; font-size: 14px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: pre; background-color: rgb(22, 22, 24); --shiki-light: #032F62; --shiki-dark: #9ECBFF;\"> vitepress@next</span>";
+
+/** The same selection's `text/plain`. */
+export const VITEPRESS_SHIKI_DARK_PLAIN = "npm add -D vitepress@next";
+
+/**
+ * The VS Code / Cursor integrated terminal — `@xterm/addon-serialize` 0.13.0's
+ * `serializeAsHTML`, which is the exact call behind "Copy Selection as HTML".
+ * Produced by running the addon over a 40-column terminal rather than captured
+ * off a pasteboard, because the serializer *is* the format: VS Code hands it the
+ * buffer and puts the result on the clipboard unchanged.
+ *
+ * One `<div>` per row, one `<span>` per run, dim as `opacity`, and every row
+ * padded out to the full column count — that padding is what
+ * `trimTrailingPadding` exists for. The wrapper's `#000000` on `#ffffff` is
+ * hard-coded by the addon and is not the terminal's real theme; it is discounted
+ * as a wrapper either way.
+ */
+export const VSCODE_XTERM_SERIALIZE = "<html><body><!--StartFragment--><pre><div style='color: #000000; background-color: #ffffff; font-family: courier-new, courier, monospace; font-size: 15px;'><div><span></span><span style='color: #4e9a06;'>➜</span><span> </span><span style='color: #06989a;'>boron</span><span> </span><span style='color: #3465a4;'>git:(</span><span style='color: #cc0000;'>main</span><span style='color: #3465a4;'>)</span><span> nub test             </span></div><div><span></span><span style='font-weight: bold;'>PASS</span><span> </span><span style='color: #555753;'>ansi.test.ts</span><span>                       </span></div><div><span></span><span style='color: #eeeeec; background-color: #cc0000;'> FAIL </span><span> one assertion                    </span></div><div><span></span><span style='text-decoration: underline;'>http://localhost:5173/</span><span>                  </span></div><div><span></span><span style='opacity: 0.5;'>dim output</span><span>                              </span></div><div><span>                                        </span></div></div></pre><!--EndFragment--></body></html>";

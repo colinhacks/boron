@@ -134,9 +134,12 @@ export function TerminalSurface({
           "Mod-\\": () => (latest.current.formatting.clearFormatting(), true),
           // A terminal has no tab stops to land on here, and moving focus out of
           // the block mid-edit is worse than inserting the two spaces meant.
-          Tab: (editorState, dispatch) => {
+          Tab: (editorState, dispatch, view) => {
+            // `collapseBox` dispatches, which leaves the state this command was
+            // handed one transaction behind — building on it puts the spaces
+            // back at the caret the rectangle replaced.
             if (latest.current.box) collapseBox();
-            dispatch?.(editorState.tr.insertText("  ").scrollIntoView());
+            dispatch?.((view?.state ?? editorState).tr.insertText("  ").scrollIntoView());
             return true;
           },
         }),
