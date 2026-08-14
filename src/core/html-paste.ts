@@ -250,8 +250,11 @@ function walk(node: Node, style: Inherited, collector: Collector, rules: readonl
         pushText(collector, part, style);
       });
     } else {
-      // Outside `white-space: pre`, a newline in the markup is source
-      // formatting, not content — drop it along with the indentation it drags in.
+      // Outside `white-space: pre`, a newline in the markup is *usually* source
+      // formatting, not content — drop it along with the indentation it drags
+      // in. Where it was content after all, the whole document is read a second
+      // time with this branch switched off and the plain flavour picks the
+      // winner; see `preservingWhitespace`.
       pushText(collector, text.replace(/[ \t]*[\r\n]+[ \t]*/g, ""), style);
     }
     return;
@@ -291,6 +294,71 @@ function walk(node: Node, style: Inherited, collector: Collector, rules: readonl
   for (const child of Array.from(element.childNodes)) walk(child, next, collector, rules);
 
   if (isBlock && collector.current.length > 0) breakLine(collector);
+}
+
+/** The rows a flavour states, with the trailing blank ones a copy always drags in dropped. */
+function contentRows(text: string): string[] {
+  const rows = text.replace(/\r\n?/g, "\n").split("\n");
+  while (rows.length > 0 && rows[rows.length - 1]!.trim() === "") rows.pop();
+  return rows;
+}
+
+/** Read the whole document, with `white-space` starting at the given value. */
+function collectLines(
+  body: Element,
+  rules: readonly StyleRule[],
+  preserveWhitespace: boolean,
+): Run[][] {
+  const collector: Collector = { lines: [], current: [] };
+  const initial: Inherited = {
+    color: null,
+    background: null,
+    rowColor: null,
+    rowBackground: null,
+    bold: false,
+    dim: false,
+    italic: false,
+    underline: false,
+    strikethrough: false,
+    preserveWhitespace,
+  };
+  for (const child of Array.from(body.childNodes)) walk(child, initial, collector, rules);
+  if (collector.current.length > 0) breakLine(collector);
+  return collector.lines;
+}
+
+/**
+ * A second reading of the same markup that believes its newlines.
+ *
+ * `walk` drops a newline outside `white-space: pre`, which is what a browser
+ * does and what pretty-printed markup needs — Terminal.app's HTML puts one
+ * between every `<p>` and none of them are rows. But a selection made *inside* a
+ * `<pre>` arrives without the `<pre>`: Chromium serializes the fragment, and a
+ * fragment that starts and ends within one element carries none of the element's
+ * own styling. A Shiki code block copied that way is a flat run of
+ * `<span style="color: …">` with literal newlines between the rows and nothing
+ * anywhere saying that whitespace is significant — so every row of it was being
+ * folded onto one line, indentation and all.
+ *
+ * `relineFromPlainText` cannot repair that on its own: it cuts on offsets, so it
+ * first demands the markup say character for character what the plain flavour
+ * says, and the dropped newline takes each row's indentation with it. Reading
+ * the document again with the branch switched off restores both at once, and the
+ * plain flavour says which of the two readings was right.
+ *
+ * Only ever accepted on an exact match, which is what keeps it from inventing
+ * rows in markup whose newlines really were formatting. Terminal.app's reading
+ * gains a blank row per `<p>` boundary under this rule, disagrees, and is
+ * discarded.
+ */
+function preservingWhitespace(
+  body: Element,
+  rules: readonly StyleRule[],
+  plain: string,
+): Run[][] | null {
+  const lines = collectLines(body, rules, true);
+  const rows = lines.map((line) => line.map((run) => run.text).join(""));
+  return contentRows(rows.join("\n")).join("\n") === contentRows(plain).join("\n") ? lines : null;
 }
 
 /**
@@ -428,8 +496,7 @@ function uniformBackground(lines: readonly Run[][]): string | null {
  * and its newlines say nothing about these runs.
  */
 function relineFromPlainText(lines: readonly ParsedLine[], plain: string): readonly ParsedLine[] {
-  const rows = plain.replace(/\r\n?/g, "\n").split("\n");
-  while (rows.length > 0 && rows[rows.length - 1]!.trim() === "") rows.pop();
+  const rows = contentRows(plain);
   // Only ever adds rows. Fewer would mean the plain text is the poorer account.
   if (rows.length <= lines.length) return lines;
 
@@ -512,33 +579,21 @@ export function parseHtmlClipboard(
   const rules = collectRules(parsed);
   const root = findRootColors(body, rules);
 
-  const collector: Collector = { lines: [], current: [] };
-  const initial: Inherited = {
-    color: null,
-    background: null,
-    rowColor: null,
-    rowBackground: null,
-    bold: false,
-    dim: false,
-    italic: false,
-    underline: false,
-    strikethrough: false,
-    preserveWhitespace: false,
-  };
-
-  for (const child of Array.from(body.childNodes)) walk(child, initial, collector, rules);
-  if (collector.current.length > 0) breakLine(collector);
+  // The markup's own newlines, where the plain flavour vouches for them; what a
+  // browser would render otherwise.
+  const collected =
+    (plain ? preservingWhitespace(body, rules, plain) : null) ?? collectLines(body, rules, false);
 
   // The wrapper wins where there is one; the rows only stand in for it when
   // there is not.
-  const fallback = defaultColors(collector.lines);
+  const fallback = defaultColors(collected);
   const defaults: Defaults = {
     color: root.color ?? fallback.color,
-    background: root.background ?? fallback.background ?? uniformBackground(collector.lines),
+    background: root.background ?? fallback.background ?? uniformBackground(collected),
     ansi16,
   };
 
-  const parsedLines: ParsedLine[] = collector.lines.map((runs) => ({
+  const parsedLines: ParsedLine[] = collected.map((runs) => ({
     spans: runs.length > 0 ? runs.map((run) => toSpan(run, defaults)) : [{ text: "", marks: {} }],
   }));
 

@@ -229,3 +229,32 @@ export const MONACO_VSCODE_EDITOR = "<div style=\"color: #d4d4d4;background-colo
 
 /** The same copy's `text/plain`. */
 export const MONACO_VSCODE_EDITOR_PLAIN = "const greet = (who: string) => {\n  console.log(`hi ${who}`);\n};\n";
+
+/**
+ * A Shiki-highlighted code block copied out of Chrome with the selection made
+ * INSIDE the `<pre>` — dragged from the first character to the last rather than
+ * taken with the block's own copy button.
+ *
+ * That one detail changes the whole shape. Chromium serializes the selected
+ * fragment, and a fragment that begins and ends within one element carries none
+ * of that element's styling, so the `<pre>` — and with it the only
+ * `white-space: pre` in the document — never reaches the clipboard. What lands
+ * is a flat run of `<span style="color: rgb(...)">` with the rows separated by
+ * literal newlines and nothing anywhere saying those newlines are content.
+ * Nothing states a background, either, which is why the same selection taken
+ * with the `<pre>` looks like `NUBJS_SHIKI_BLOCK` instead.
+ *
+ * A browser reading this would fold it onto one line, and so did we: all 13 rows
+ * arrived as one, each row's indentation swallowed along with the newline that
+ * preceded it. `relineFromPlainText` could not repair it either — it cuts on
+ * offsets, and the lost indentation puts the two flavours out of agreement
+ * before it starts.
+ */
+export const SHIKI_INSIDE_PRE = "<meta charset='utf-8'><span style=\"color: rgb(204, 123, 244);\">import</span> <span style=\"color: rgb(211, 215, 222);\">{</span> mkdtemp<span style=\"color: rgb(211, 215, 222);\">,</span> rm<span style=\"color: rgb(211, 215, 222);\">,</span> writeFile <span style=\"color: rgb(211, 215, 222);\">}</span> <span style=\"color: rgb(204, 123, 244);\">from</span> <span style=\"color: rgb(155, 233, 99);\">\"node:fs/promises\"</span><span style=\"color: rgb(211, 215, 222);\">;</span>\n<span style=\"color: rgb(204, 123, 244);\">import</span> <span style=\"color: rgb(211, 215, 222);\">{</span> tmpdir <span style=\"color: rgb(211, 215, 222);\">}</span> <span style=\"color: rgb(204, 123, 244);\">from</span> <span style=\"color: rgb(155, 233, 99);\">\"node:os\"</span><span style=\"color: rgb(211, 215, 222);\">;</span>\n<span style=\"color: rgb(204, 123, 244);\">import</span> <span style=\"color: rgb(211, 215, 222);\">{</span> join <span style=\"color: rgb(211, 215, 222);\">}</span> <span style=\"color: rgb(204, 123, 244);\">from</span> <span style=\"color: rgb(155, 233, 99);\">\"node:path\"</span><span style=\"color: rgb(211, 215, 222);\">;</span>\n\n<span style=\"color: rgb(204, 123, 244);\">async</span> <span style=\"color: rgb(204, 123, 244);\">function</span> <span style=\"color: rgb(112, 184, 255);\">tempDir</span><span style=\"color: rgb(211, 215, 222);\">()</span> <span style=\"color: rgb(211, 215, 222);\">{</span>\n  <span style=\"color: rgb(204, 123, 244);\">const</span> path = <span style=\"color: rgb(204, 123, 244);\">await</span> <span style=\"color: rgb(112, 184, 255);\">mkdtemp</span><span style=\"color: rgb(211, 215, 222);\">(</span><span style=\"color: rgb(112, 184, 255);\">join</span><span style=\"color: rgb(211, 215, 222);\">(</span><span style=\"color: rgb(112, 184, 255);\">tmpdir</span><span style=\"color: rgb(211, 215, 222);\">(),</span> <span style=\"color: rgb(155, 233, 99);\">\"scratch-\"</span><span style=\"color: rgb(211, 215, 222);\">));</span>\n  <span style=\"color: rgb(204, 123, 244);\">return</span> <span style=\"color: rgb(211, 215, 222);\">{</span> path<span style=\"color: rgb(211, 215, 222);\">,</span> <span style=\"color: rgb(211, 215, 222);\">[</span><span style=\"color: rgb(244, 123, 133);\">Symbol</span><span style=\"color: rgb(211, 215, 222);\">.</span><span style=\"color: rgb(244, 123, 133);\">asyncDispose</span><span style=\"color: rgb(211, 215, 222);\">]:</span> <span style=\"color: rgb(211, 215, 222);\">()</span> <span style=\"color: rgb(204, 123, 244);\">=&gt;</span> <span style=\"color: rgb(112, 184, 255);\">rm</span><span style=\"color: rgb(211, 215, 222);\">(</span>path<span style=\"color: rgb(211, 215, 222);\">,</span> <span style=\"color: rgb(211, 215, 222);\">{</span> <span style=\"color: rgb(244, 123, 133);\">recursive</span><span style=\"color: rgb(211, 215, 222);\">:</span> <span style=\"color: rgb(94, 237, 237);\">true</span><span style=\"color: rgb(211, 215, 222);\">,</span> <span style=\"color: rgb(244, 123, 133);\">force</span><span style=\"color: rgb(211, 215, 222);\">:</span> <span style=\"color: rgb(94, 237, 237);\">true</span> <span style=\"color: rgb(211, 215, 222);\">})</span> <span style=\"color: rgb(211, 215, 222);\">};</span>\n<span style=\"color: rgb(211, 215, 222);\">}</span>\n\n<span style=\"color: rgb(211, 215, 222);\">{</span>\n  <span style=\"color: rgb(204, 123, 244);\">await using</span> dir = <span style=\"color: rgb(204, 123, 244);\">await</span> <span style=\"color: rgb(112, 184, 255);\">tempDir</span><span style=\"color: rgb(211, 215, 222);\">();</span>\n  <span style=\"color: rgb(204, 123, 244);\">await</span> <span style=\"color: rgb(112, 184, 255);\">writeFile</span><span style=\"color: rgb(211, 215, 222);\">(</span><span style=\"color: rgb(112, 184, 255);\">join</span><span style=\"color: rgb(211, 215, 222);\">(</span>dir<span style=\"color: rgb(211, 215, 222);\">.</span>path<span style=\"color: rgb(211, 215, 222);\">,</span> <span style=\"color: rgb(155, 233, 99);\">\"notes.txt\"</span><span style=\"color: rgb(211, 215, 222);\">),</span> <span style=\"color: rgb(155, 233, 99);\">\"hello\"</span><span style=\"color: rgb(211, 215, 222);\">);</span>\n<span style=\"color: rgb(211, 215, 222);\">}</span> <span style=\"color: rgb(129, 136, 152);\">// dir[Symbol.asyncDispose]() is called and awaited here</span>";
+
+/**
+ * The same copy's `text/plain`, which is the only flavour that still knows where
+ * the rows are — and, because the markup dropped each row's leading spaces with
+ * the newline, the only one that still has the indentation.
+ */
+export const SHIKI_INSIDE_PRE_PLAIN = "import { mkdtemp, rm, writeFile } from \"node:fs/promises\";\nimport { tmpdir } from \"node:os\";\nimport { join } from \"node:path\";\n\nasync function tempDir() {\n  const path = await mkdtemp(join(tmpdir(), \"scratch-\"));\n  return { path, [Symbol.asyncDispose]: () => rm(path, { recursive: true, force: true }) };\n}\n\n{\n  await using dir = await tempDir();\n  await writeFile(join(dir.path, \"notes.txt\"), \"hello\");\n} // dir[Symbol.asyncDispose]() is called and awaited here";

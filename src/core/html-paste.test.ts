@@ -6,7 +6,10 @@ import {
   MONACO_VSCODE_EDITOR_PLAIN,
   NUBJS_SHIKI_BLOCK,
   NUBJS_SHIKI_BLOCK_PLAIN,
+  SHIKI_INSIDE_PRE,
+  SHIKI_INSIDE_PRE_PLAIN,
   TERMINAL_APP_2_15,
+  TERMINAL_APP_2_15_PLAIN,
   VITEPRESS_SHIKI_DARK,
   VITEPRESS_SHIKI_DARK_PLAIN,
   VSCODE_XTERM_SERIALIZE,
@@ -394,6 +397,51 @@ describe("parseHtmlClipboard", () => {
       const lines = parseHtmlClipboard(html, ansi16, "ab\ncd")!;
       expect(lines.map((line) => line.spans.map((span) => span.text).join(""))).toEqual(["ab", "cd"]);
       expect(lines.every((line) => line.spans.every((span) => span.marks.fg === "redBright"))).toBe(true);
+    });
+  });
+
+  describe("markup whose newlines are the rows", () => {
+    /**
+     * A selection made inside the `<pre>` loses the `<pre>`, so the rows are
+     * literal newlines with nothing declaring them significant. 13 rows arrived
+     * as one, each row's indentation dropped along with the newline before it.
+     */
+    it("keeps the rows a selection inside a `<pre>` left as bare newlines", () => {
+      const lines = parseHtmlClipboard(SHIKI_INSIDE_PRE, ansi16, SHIKI_INSIDE_PRE_PLAIN)!;
+      const text = lines.map((line) => line.spans.map((span) => span.text).join(""));
+      expect(lines).toHaveLength(13);
+      // Character for character, indentation and blank rows included.
+      expect(text.join("\n")).toBe(SHIKI_INSIDE_PRE_PLAIN);
+      expect(text[3]).toBe("");
+      expect(text[5]).toBe('  const path = await mkdtemp(join(tmpdir(), "scratch-"));');
+      // And the highlighting the markup carried survives the second reading.
+      expect(lines[0]!.spans.find((span) => span.text === "import")?.marks.fg).toBeDefined();
+    });
+
+    /**
+     * The rule itself, without the fixture's bytes: where the plain flavour
+     * vouches for them, the markup's own newlines are rows and the whitespace
+     * behind them is content — and each run keeps the marks it arrived with.
+     */
+    it("believes a newline the plain flavour also states", () => {
+      const html =
+        '<span style="color: rgb(255,0,0)">red</span>\n' +
+        '  <span style="color: rgb(0,0,255)">blue</span>';
+      const lines = parseHtmlClipboard(html, ansi16, "red\n  blue")!;
+      expect(lines.map((line) => line.spans.map((span) => span.text).join(""))).toEqual(["red", "  blue"]);
+      expect(lines[0]!.spans[0]!.marks).toEqual({ fg: "redBright" });
+      expect(lines[1]!.spans.find((span) => span.text === "blue")?.marks).toEqual({ fg: "blue" });
+    });
+
+    /**
+     * And the other half of the rule: a newline the plain flavour does NOT state
+     * is source formatting, and reading it as a row is refused. Terminal.app
+     * pretty-prints one between every `<p>`, and believing those would put a
+     * blank row between every line of output.
+     */
+    it("refuses a newline that is only how the markup was printed", () => {
+      const withPlain = parseHtmlClipboard(TERMINAL_APP_2_15, ansi16, TERMINAL_APP_2_15_PLAIN);
+      expect(withPlain).toEqual(parseHtmlClipboard(TERMINAL_APP_2_15, ansi16));
     });
   });
 });
