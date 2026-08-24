@@ -8,7 +8,7 @@ Boron's paste path prefers `text/plain` carrying SGR codes, then `text/html`, th
 
 Three tiers, and the table marks which each row is.
 
-- **Fixture** — real bytes, in [src/core/clipboard-fixtures.ts](../src/core/clipboard-fixtures.ts), pinned by a test. Ghostty, Terminal.app (HTML and RTF), the VS Code editor, the VS Code terminal's serializer, and three docs-site code blocks.
+- **Fixture** — real bytes, in [src/core/clipboard-fixtures.ts](../src/core/clipboard-fixtures.ts), pinned by a test. Ghostty, Terminal.app (HTML and RTF), the VS Code editor, the VS Code terminal's serializer, the asciinema player, and three docs-site code blocks.
 - **Read** — no capture, but the app's own clipboard code was read. Good enough to know the shape and to say whether a flavour exists; not good enough to write a fixture from.
 - **Unknown** — say so and stop. Warp is closed source and documents nothing about clipboard formats; JetBrains' reworked terminal might route through IntelliJ's rich copy and the wiring was not found.
 
@@ -31,6 +31,8 @@ The **Read** rows were gathered on 2026-08-13 against each project's source at t
 | PuTTY | `CF_RTF` | No | Background is `\highlightN` rather than `\cbN`; bytes in the machine's ANSI code page with no `\ansicpg` | Read |
 | kitty | none | — | Plain text. But `copy_ansi_to_clipboard` puts **SGR escapes in `text/plain`**, which Boron's `hasAnsi` path reads | Read |
 | Alacritty, WezTerm, Rio, xterm, Hyper, Zed, JetBrains (JediTerm), tmux, GNU screen | none | — | Plain text only. Nothing to recover; the `$`-prompt heuristic is what they get | Read |
+| asciinema player (web) | `text/html` | **Yes** — it is an ordinary browser copy | Each row a `<span>` made block by its style; **no newline anywhere**, and the plain flavour is one line | Fixture |
+| GitHub Actions log viewer | unknown | unknown | Renders nothing at all to a signed-out headless browser, so it was never captured | Unknown |
 | Warp | unknown | unknown | Closed source, undocumented | Unknown |
 | JetBrains' reworked terminal | unknown | unknown | The classic JediTerm path is plain text; the new one may differ | Unknown |
 
@@ -43,6 +45,7 @@ Each of these is a real defect that was found and fixed, or a trap that is curre
 - **A backdrop with nothing to read it off.** Chrome serializes *computed* styles, so a code block copied out of a browser is a flat run of sibling spans that each restate the page's background — no wrapper, no row. `uniformBackground` treats a colour covering every character as a surface. A colour covering only part of the text is a badge and stays.
 - **Rows padded to the window.** xterm.js pads every row out to the column count. `trimTrailingPadding` drops that, by the same rule `parseAnsi` uses: a trailing space wearing a background or an underline is the terminal drawing, not padding.
 - **Rows that only the plain flavour knows about.** Chrome omits `display`, so a docs site whose rows are `<span>`s made block by a stylesheet arrives with no row boundary anywhere. `relineFromPlainText` cuts on the plain flavour's newlines when the two agree character for character.
+- **Rows that only the *markup* knows about — the same problem inverted.** The asciinema player positions each row as a block-displayed `<span>` and writes no newline anywhere, so Chromium's `text/plain` for the same selection is one line with the rows run together on their padding. This is why `relineFromPlainText` may only ever *add* rows: let the plain flavour win a disagreement it is losing and twenty rows collapse into one. Neither flavour is reliably the better account, which is the reason each is believed only about what it alone knows.
 - **A selection that lost its `<pre>`.** Drag-select *inside* a code block rather than using its copy button and Chromium serializes a fragment that begins and ends within the `<pre>` — so the `<pre>` never reaches the clipboard, and with it goes the only `white-space: pre` in the document. The rows are still literal newlines, but nothing left says they are content, and a browser would fold the lot onto one line. `preservingWhitespace` reads the document a second time believing those newlines and keeps that reading only if it reproduces the plain flavour exactly. `relineFromPlainText` cannot cover this one: dropping the newline drops each row's indentation with it, which puts the two flavours out of agreement before it starts.
 - **Misnested markup.** Ghostty opens an `<a>` in one `<div>` and closes it in the next; it is in upstream's own test expectations, so it is the format rather than a passing bug. The HTML parser's own recovery handles it — but it means the DOM you walk is not the tree the markup looks like.
 - **A wrapper that lies.** The xterm.js serializer hard-codes `#000000` on `#ffffff` for its wrapper whatever the real theme is, because VS Code never passes `includeGlobalBackground`. Discounting the wrapper is right anyway; believing it about anything else is not.

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  ASCIINEMA_PLAYER,
+  ASCIINEMA_PLAYER_PLAIN,
   GHOSTTY_1_3_1,
   GHOSTTY_1_3_1_PLAIN,
   MONACO_VSCODE_EDITOR,
@@ -237,6 +239,29 @@ describe("parseHtmlClipboard", () => {
       [["a", { fg: "red" }]],
       [["b", { fg: "green" }]],
     ]);
+  });
+
+  it("keeps rows the markup states and the plain flavour has lost", () => {
+    // The asciinema player positions each row as a `<span>` made block by its
+    // style. There is not one newline in the markup, and Chromium's `text/plain`
+    // for the same selection is a single line with the rows run together on their
+    // padding — so the plain flavour is the poorer account here, and the rule that
+    // it may only ever *add* rows is the whole difference between four rows and one.
+    expect(ASCIINEMA_PLAYER_PLAIN.split("\n")).toHaveLength(1);
+
+    const lines = parseHtmlClipboard(ASCIINEMA_PLAYER, ansi16, ASCIINEMA_PLAYER_PLAIN)!;
+    expect(lines.map((line) => line.spans.map((span) => span.text).join(""))).toEqual([
+      "==> Downloading https://homebrew.bintray.com/bottles/asciinema-2.0.2_2.catalina.b",
+      "ottle.1.tar.gz",
+      "==> Downloading from https://akamai.bintray.com/4a/4ac59de631594cea60621b45d85214",
+      "e39a90a0ba8ddf4eeec5cba34bd6145711",
+    ]);
+    // Reading it without the plain flavour reaches the same rows, which is what
+    // says the markup was never the one that needed repairing.
+    expect(parseHtmlClipboard(ASCIINEMA_PLAYER, ansi16)!.length).toBe(lines.length);
+
+    const marksFor = (text: string) => lines.flatMap((line) => line.spans).find((span) => span.text === text)?.marks;
+    expect(marksFor("==> ")).toEqual({ fg: "cyanBright" });
   });
 
   it("reads styling out of a <style> block, not just the style attribute", () => {
