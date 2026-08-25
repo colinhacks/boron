@@ -128,9 +128,9 @@ const LEGEND: readonly { id: string; text: ReactNode }[] = [
 type CopyMode = "image" | "link" | "ansi" | "chalk" | "text";
 
 const COPY_MODES: readonly { id: CopyMode; label: string }[] = [
+  { id: "ansi", label: "ANSI" },
   { id: "image", label: "image" },
   { id: "link", label: "link" },
-  { id: "ansi", label: "ANSI" },
   { id: "chalk", label: "chalk" },
   { id: "text", label: "text" },
 ];
@@ -152,7 +152,7 @@ export function App({ shared }: AppProps = {}) {
   const [backgroundId, setBackgroundId] = useState(() => shared?.backgroundId ?? persisted.backgroundId ?? DEFAULT_BACKGROUND_ID);
   const [frame, setFrame] = useState<FrameSettings>(() => shared?.frame ?? persisted.frame ?? DEFAULT_FRAME);
   const [format, setFormat] = useState<ImageFormat>("png");
-  const [copyMode, setCopyMode] = useState<CopyMode>("image");
+  const [copyMode, setCopyMode] = useState<CopyMode>("ansi");
   const [fontsReady, setFontsReady] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [previewScale, setPreviewScale] = useState(1);
