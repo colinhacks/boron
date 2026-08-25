@@ -429,6 +429,9 @@ export function App({ shared }: AppProps = {}) {
         </div>
 
         <div className="export-bar">
+          <a className="button button--quiet" href="/about">
+            About
+          </a>
           <button type="button" className="button button--quiet" onClick={resetAll}>
             Reset
           </button>

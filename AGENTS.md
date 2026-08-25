@@ -28,7 +28,7 @@ The package manager is **`nub`**, not npm or pnpm.
 
 `nub run build` is the gate — it typechecks before bundling, so a green build covers both.
 
-This is a **Vite + React** app, not Next.js. There is a root `index.html` carrying all the page metadata, the entry is `src/main.tsx`, and static files are served from `public/` verbatim.
+This is a **Vite + React** app, not Next.js. There is a root `index.html` carrying all the page metadata, the entry is `src/main.tsx`, and static files are served from `public/` verbatim. `about.html` beside it is a second, fully static page served at `/about` — plain HTML with no React, styled by `src/about.css` — and the reading copy on both pages shares `src/prose.css`.
 
 ## Copy
 

@@ -13,4 +13,11 @@
       <image:loc>https://boron.sh/og.png</image:loc>
     </image:image>
   </url>
+  <url>
+    <loc>https://boron.sh/about</loc>
+    <lastmod>2026-08-25</lastmod>
+    <image:image>
+      <image:loc>https://boron.sh/example.png</image:loc>
+    </image:image>
+  </url>
 </urlset>

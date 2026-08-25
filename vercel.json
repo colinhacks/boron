@@ -3,5 +3,6 @@
   "framework": "vite",
   "installCommand": "curl -fsSL https://nubjs.com/install.sh | bash -s 0.6.0 && $HOME/.nub/bin/nub install",
   "buildCommand": "$HOME/.nub/bin/nub run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "cleanUrls": true
 }

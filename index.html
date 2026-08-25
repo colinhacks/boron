@@ -88,108 +88,39 @@
   <body>
     <div id="root"></div>
 
-    <!-- Static, server-delivered copy. The editor above renders nothing a
-         crawler can read without running JavaScript — and even once it has run,
-         the DOM says "Reset", "Save PNG" and eight theme names. This section is
-         what a search engine indexes the page on, so it is plain HTML outside
-         #root rather than a React component. Keep every claim in it true of the
-         app: the feature list mirrors the README, the clipboard notes mirror
-         wiki/clipboard-sources.md. -->
-    <section class="about" aria-labelledby="about-title">
-      <div class="about__inner">
+    <!-- Static, server-delivered description. The editor above renders nothing
+         a crawler can read without running JavaScript — and even once it has
+         run, the DOM says "Reset", "Save PNG" and eight theme names. This is
+         what a search engine indexes the homepage on, so it is plain HTML
+         outside #root rather than a React component. The long form — features,
+         which terminals copy their colors, the questions — is about.html. -->
+    <section class="about prose" aria-labelledby="about-title">
+      <div class="prose__inner">
         <h1 id="about-title">Boron is a terminal screenshot generator</h1>
         <p>
           Paste real terminal output, or type it, and Boron keeps the ANSI colors, lets you edit the result like a
           document, and exports it as a PNG, SVG, JPEG or WebP. It runs in the browser and it is free. There is no
           upload: parsing and rendering happen on your machine.
         </p>
+        <p>
+          Everything Boron draws can exist in a real terminal. The palette is chalk's sixteen colors, the modifiers are
+          chalk's modifiers, and the automatic styling is expressed as chalk marks rather than hand-picked hex, so the
+          picture you compose and the escape sequence you copy out are the same thing. Mock up what you want a program to
+          print, then hand the ANSI or the chalk snippet to whoever is writing it.
+        </p>
+        <p>
+          <a href="/about">More about Boron</a>: what it does, how to copy colored output out of each terminal, and the
+          questions people ask.
+        </p>
 
         <img
-          class="about__shot"
+          class="prose__shot"
           src="/example.png"
           width="1000"
           height="507"
           loading="lazy"
           alt="A terminal screenshot exported from Boron: a dev server starting, with a colored prompt, underlined links, a filled project name and a green READY badge"
         />
-
-        <h2>What it does</h2>
-        <ul>
-          <li>
-            <strong>Keeps the colors of pasted output.</strong> ANSI escape codes are parsed in full, including 256-color
-            and truecolor, and rich text is read from the clipboard of the terminals that write it.
-          </li>
-          <li>
-            <strong>Edits like a document.</strong> Select any run and recolor it, or type your own. Colors are chalk's
-            sixteen names rather than hex values, so switching theme re-maps them.
-          </li>
-          <li>
-            <strong>Selects a rectangle, not a run.</strong> Terminal output is a grid, so the thing to restyle is often
-            vertical: one column of a table, the <code>tree</code> gutter, the timestamps down the left. Hold
-            <kbd>Alt</kbd> (<kbd>⌥</kbd> on a Mac) and drag to select exactly those cells on every row.
-          </li>
-          <li>
-            <strong>Renders command lines bright and output dim.</strong> A line opening with <code>$</code>,
-            <code>❯</code>, a bare <code>&gt;</code> or oh-my-zsh's <code>➜</code> is treated as a command.
-          </li>
-          <li>
-            <strong>Eight themes.</strong> Boron, VS Code Dark+, Dracula, Tokyo Night, Catppuccin Mocha, Nord, One Dark
-            and Solarized Dark, each with a matching set of backdrops.
-          </li>
-          <li>
-            <strong>Exports PNG, SVG, JPEG or WebP</strong>, or copies the image straight to the clipboard. The SVG embeds
-            the fonts it uses, so it renders the same everywhere.
-          </li>
-          <li>
-            <strong>Copies the text back out</strong> as raw ANSI, a runnable chalk snippet, or plain text. Mock up what
-            you want a program to print, then hand the escape sequence to whoever is writing it.
-          </li>
-          <li>
-            <strong>Shares as a link.</strong> The whole document and its settings travel in the URL, so a link opens the
-            same picture for whoever receives it.
-          </li>
-        </ul>
-
-        <h2>How to take a terminal screenshot with the colors kept</h2>
-        <ol>
-          <li>
-            Copy the output in your terminal. Ghostty, Terminal.app, VS Code, Konsole and Tabby copy rich text on an
-            ordinary copy. iTerm2 needs <kbd>⌘⌥C</kbd>, Windows Terminal needs <code>copyFormatting</code> turned on, and
-            GNOME Terminal has a separate "Copy as HTML" item. Any terminal can also put the raw escape codes on the
-            clipboard, for example <code>git log --color=always | pbcopy</code>.
-          </li>
-          <li>Paste it into the editor above. Escape codes and rich text are both read, and the colors map onto the active theme.</li>
-          <li>Pick a theme and a backdrop, set the width in columns, and add a title bar if you want one.</li>
-          <li>Save it as an image, copy it to the clipboard, or copy a link to the document.</li>
-        </ol>
-
-        <h2>Questions</h2>
-        <h3>How is this different from carbon.now.sh or ray.so?</h3>
-        <p>
-          Those tools syntax-highlight source code by language. Boron reads the ANSI escape codes a program printed, so a
-          screenshot of a dev server, a test run or a colored <code>ls</code> looks the way the terminal showed it.
-        </p>
-        <h3>Can I convert ANSI output to SVG?</h3>
-        <p>
-          Yes. Paste the output and save as SVG. The file embeds the font faces it uses and stays sharp at any size, which
-          suits a README or documentation.
-        </p>
-        <h3>My terminal only copies plain text. Does it still work?</h3>
-        <p>
-          Yes. Boron reads the escape codes themselves, so pipe a command's colored output to the clipboard and paste
-          that. kitty can copy escape codes directly with <code>copy_ansi_to_clipboard</code>. Terminals with no rich
-          copy at all, such as Alacritty, WezTerm and tmux, still get the command-line highlighting.
-        </p>
-        <h3>Does anything get uploaded?</h3>
-        <p>
-          No. There is no server; parsing and rendering happen in your browser. A share link carries the document in the
-          URL itself.
-        </p>
-        <h3>Is the source available?</h3>
-        <p>
-          Yes, at <a href="https://github.com/colinhacks/boron">github.com/colinhacks/boron</a>. Boron is built by
-          <a href="https://x.com/colinhacks">@colinhacks</a>.
-        </p>
       </div>
     </section>
 

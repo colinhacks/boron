@@ -1,0 +1,18 @@
+/* The palette and type both pages share: the editor (index.css) and the
+   About page (about.css). */
+:root {
+  --bg: #08090d;
+  --bg-elev: #0e1016;
+  --bg-elev-2: #161923;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --text: #e7eaf2;
+  --text-dim: #949cb0;
+  --text-faint: #5d6577;
+  --accent: #7c5cff;
+  --accent-soft: rgba(124, 92, 255, 0.16);
+  --radius: 10px;
+  --ui-font: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+
+  color-scheme: dark;
+}
