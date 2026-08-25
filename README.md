@@ -23,7 +23,7 @@
 - **Copy it back out as text** — raw ANSI, a runnable chalk snippet, or plain text. Mock up what you want a program to print, then hand an agent the escape sequence.
 
 <p align="center">
-  <img src="docs/example.png" alt="An exported terminal block showing a dev server starting, with a colored prompt, underlined links, a filled project name and a green READY badge">
+  <img src="public/example.png" alt="An exported terminal block showing a dev server starting, with a colored prompt, underlined links, a filled project name and a green READY badge">
 </p>
 
 Everything Boron draws is representable in a real terminal. The palette is chalk's sixteen colors, the modifiers are chalk's modifiers, and the automatic styling is expressed as chalk marks rather than hand-picked hex, so the picture you compose and the escape sequence you copy out are the same thing.

@@ -58,7 +58,7 @@ If you need to support another terminal, capture its real bytes and add them the
 
 ## Brand assets
 
-Everything in `public/` — the mark, favicons, icons, the Open Graph card — is **generated**. Don't hand-edit those files; they will be overwritten.
+The brand assets in `public/` — the mark, favicons, icons, the Open Graph card — are **generated**. Don't hand-edit those files; they will be overwritten. (`example.png`, the exported sample the README and the page copy show, plus `robots.txt`, `sitemap.xml` and `site.webmanifest`, are ordinary hand-maintained files.)
 
 ```
 node scripts/build-assets.mjs   # → public/*.svg

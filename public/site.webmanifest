@@ -1,7 +1,7 @@
 {
-  "name": "Boron — beautiful images of your terminal",
+  "name": "Boron — terminal screenshot generator",
   "short_name": "Boron",
-  "description": "Compose a terminal session, keep its ANSI colors, and export it as an image.",
+  "description": "Paste real terminal output, keep its ANSI colors, and export it as a PNG, SVG, JPEG or WebP.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

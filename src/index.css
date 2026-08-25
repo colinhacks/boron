@@ -1122,3 +1122,105 @@ input[type="range"]::-webkit-slider-thumb {
   opacity: 1;
   transform: translate(-50%, 0);
 }
+
+/* ---------------------------------------------------------------- about -- */
+
+/*
+ * The static copy under the editor, in index.html. It is there for search
+ * engines — the app itself renders nothing a crawler can read — and it sits
+ * below the fold: the editor keeps the whole first viewport, and the page only
+ * starts scrolling for whoever goes looking.
+ */
+.about {
+  border-top: 1px solid var(--border);
+  padding: 72px 24px 96px;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.about__inner {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.about h1,
+.about h2,
+.about h3 {
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.about h1 {
+  font-size: 22px;
+  font-weight: 650;
+  margin-bottom: 12px;
+}
+
+.about h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-top: 44px;
+  margin-bottom: 10px;
+}
+
+.about h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 22px;
+  margin-bottom: 4px;
+}
+
+.about p {
+  margin: 0 0 12px;
+}
+
+.about ul,
+.about ol {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.about li {
+  margin: 0 0 8px;
+}
+
+.about strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.about code,
+.about kbd {
+  font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  color: var(--text);
+  background: var(--bg-elev-2);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.about kbd {
+  border: 1px solid var(--border-strong);
+}
+
+.about a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.28);
+  text-underline-offset: 2px;
+}
+
+.about a:hover {
+  text-decoration-color: currentColor;
+}
+
+.about__shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 28px 0 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}

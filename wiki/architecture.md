@@ -4,7 +4,7 @@ Boron turns terminal output into an editable picture of a terminal. Everything b
 
 ## The shape of the app
 
-A Vite + React single-page app with no router and no framework around it. [index.html](../index.html) at the repo root carries every piece of page metadata (title, description, canonical, Open Graph, icons) and one `<div id="root">`; the viewport is pinned at `width=900` because there is no mobile layout. [src/main.tsx](../src/main.tsx) is the entry and does nothing but `createRoot().render()`. [src/App.tsx](../src/App.tsx) is the only stateful component — there is no store, no context beyond one small leaf-settings context, and no data fetching.
+A Vite + React single-page app with no router and no framework around it. [index.html](../index.html) at the repo root carries every piece of page metadata (title, description, canonical, Open Graph, icons), one `<div id="root">`, and a static `<section class="about">` of crawlable copy under it — the app renders nothing a search engine can read, so that section is what the page is indexed on; the viewport is pinned at `width=900` because there is no mobile layout. [src/main.tsx](../src/main.tsx) is the entry and does nothing but `createRoot().render()`. [src/App.tsx](../src/App.tsx) is the only stateful component — there is no store, no context beyond one small leaf-settings context, and no data fetching.
 
 Text editing is [ProseMirror](https://prosemirror.net) (`prosemirror-model`, `-state`, `-view`, `-keymap`, `-commands`, `-history`). The document is a flat list of lines, and that is *declared* rather than defended: the schema in [src/editor/schema.ts](../src/editor/schema.ts) says `doc: "line+"` and `line: "text*"`, so there is no nesting to forbid because there is no nesting to express.
 
