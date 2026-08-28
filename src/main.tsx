@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { Analytics } from "@vercel/analytics/react";
 import { App } from "./App.tsx";
 import { consumeSharedWorkspace } from "./share.ts";
 import "./index.css";
@@ -16,6 +17,7 @@ consumeSharedWorkspace()
     createRoot(container).render(
       <StrictMode>
         <App shared={shared} />
+        <Analytics />
       </StrictMode>,
     );
   });
