@@ -148,6 +148,34 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <section className="panel">
+        <div className="panel__header">
+          <h2 className="panel__title">Title bar</h2>
+          <Switch
+            label="Title bar"
+            checked={frame.showChrome}
+            onChange={(showChrome) => onFrameChange({ showChrome })}
+          />
+        </div>
+        {frame.showChrome ? (
+          // No label — the panel heading and the toggle beside it already say
+          // what this is, and the box only exists while the title bar is on.
+          <input
+            type="text"
+            name="window-title"
+            className="text-input"
+            aria-label="Title"
+            // Matches the clamp in `sanitizeFrame`. Without it the clamp fires
+            // on a real title, and the block a link opens is narrower than the
+            // one that was shared — the chrome widens to fit the title.
+            maxLength={MAX_TITLE_LENGTH}
+            value={frame.title}
+            placeholder="zsh — boron"
+            onChange={(event) => onFrameChange({ title: event.target.value })}
+          />
+        ) : null}
+      </section>
+
+      <section className="panel">
         <h2 className="panel__title">Theme</h2>
         <div className="theme-grid">
           {THEMES.map((candidate) => (
@@ -225,34 +253,6 @@ export function Sidebar({
             />
           </label>
         </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel__header">
-          <h2 className="panel__title">Title bar</h2>
-          <Switch
-            label="Title bar"
-            checked={frame.showChrome}
-            onChange={(showChrome) => onFrameChange({ showChrome })}
-          />
-        </div>
-        {frame.showChrome ? (
-          // No label — the panel heading and the toggle beside it already say
-          // what this is, and the box only exists while the title bar is on.
-          <input
-            type="text"
-            name="window-title"
-            className="text-input"
-            aria-label="Title"
-            // Matches the clamp in `sanitizeFrame`. Without it the clamp fires
-            // on a real title, and the block a link opens is narrower than the
-            // one that was shared — the chrome widens to fit the title.
-            maxLength={MAX_TITLE_LENGTH}
-            value={frame.title}
-            placeholder="zsh — boron"
-            onChange={(event) => onFrameChange({ title: event.target.value })}
-          />
-        ) : null}
       </section>
 
       <section className="panel">
