@@ -68,6 +68,34 @@ Two consequences worth knowing:
 
 `highlight` is the one workspace field no link carries. It decides no pixels, and a link states its content as ANSI — so whatever the sender had selected, what arrives is text that names its own colours, and `fromWire` says so by returning `ansi`.
 
+## What v1 actually promises
+
+The vocabulary is the obvious half of a frozen format. The half that is easy to miss is **what a link means when it does not say** — and that is where the design was quietly wrong before release.
+
+**Unsaid fields resolve through [`V1_DEFAULTS`](../src/wire.ts), never through the app's own defaults.** `DEFAULT_FRAME` is a product decision and is free to move — a wider block, a softer shadow, a card-shaped canvas out of the box. `V1_DEFAULTS` duplicates today's numbers and never moves again. Two constants that happen to agree is the correct amount of duplication, because they answer different questions.
+
+`aspect` is where that was already live rather than hypothetical. Every link the app writes says `aspect=`, which reads back as *unsaid* — so the day `DEFAULT_FRAME.aspect` became a preset, every link ever sent would have turned into that card. That is exactly the failure this whole file exists to prevent, and it was arriving through the one door left open.
+
+**Anything a reader does not recognize is unsaid, not true.** `titleBar` used to treat everything except `0` and `false` as on, so `titleBar=no` drew a title bar. It now takes `1/true/yes/on` and `0/false/no/off`, and anything else means the link did not say — the safer half to freeze, because only that one can be given a meaning later without changing what an existing link renders.
+
+**A missing `v` means 1, permanently.** That is what makes a link writable by hand, and it commits every future reader to the same reading.
+
+**These are part of the promise too, and tightening any of them breaks old links:** the clamps in `sanitizeFrame` (padding 0–400, radius 0–200, columns 1–400, shadow 0–100, title 200 characters), `MAX_LINES`, and `MAX_DECOMPRESSED_BYTES`. Widening is always safe; narrowing is a v2.
+
+**What is frozen is the id, not the paint.** `theme=nord` promises the name, and the palette behind it is a design the app owns — the same distinction that let backdrop ids change meaning within hours the first time round.
+
+The corpus in [wire.test.ts](../src/wire.test.ts) is what makes all of the above enforced rather than remembered, and it had the identical bug it exists to catch: its first entry asserted `frame: DEFAULT_FRAME`, so the one case that matters most — a link naming only its content — moved in lockstep with the app and passed wherever the defaults went. **Every expected value in that file is now a literal.** A corpus that follows the code it pins is not a corpus.
+
+## A document may not hold what a cell cannot
+
+Content travels as ANSI, so anything in a document that ANSI cannot state is a hole in the format. A tab is one: a cell grid has nowhere to put one, and `parseAnsi` has always expanded it to the next eight-column stop.
+
+The paste parsers did not. [rtf-paste.ts](../src/core/rtf-paste.ts) and [html-paste.ts](../src/core/html-paste.ts) hand their text back directly rather than through `parseAnsi`, so a copy out of Terminal.app or iTerm2 — the two macOS terminals that write only RTF — could put a **raw tab** in the document. The preview drew it as a browser tab advance; a share link brought it back as spaces. Reproduced against the captured pasteboard bytes in `clipboard-fixtures.ts`: twenty-nine cells became thirty-two, and the reader's picture was wider than the sender's. That is the founding constraint of this feature, broken by one character.
+
+The fix is at the funnel rather than at each parser. `toPrintableCells` in [ansi.ts](../src/core/ansi.ts) is `parseAnsi`'s own reading of those bytes, lifted out; `lineOf` in [document.ts](../src/core/document.ts) applies it, and every document in the app is assembled there — `sanitizeDocument`, `parsedLinesToDocument`, and `nodeToDocument` at the editor boundary. So no door is left: not a rich-text paste, not a crafted `data-pm-slice` on the clipboard, not a `localStorage` entry written by an older build.
+
+It is the same shape as the `Color` union and the schema's `validate` hook, and it belongs with them in the list of things that make the central invariant structural instead of hoped for.
+
 ## Options that were considered
 
 1. **An explicit frozen wire schema.** `WireDocument`/`WireFrame` types that deliberately never reference `TerminalDocument` or `FrameSettings`, plus `toWire`/`fromWire`. The internal model then moves freely behind the seam. **Chosen.**

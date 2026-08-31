@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { LineElement } from "./core/document.ts";
-import { DEFAULT_THEME } from "./core/themes.ts";
-import { DEFAULT_BACKGROUND_ID, TRANSPARENT_ID } from "./export/background.ts";
+import { lineText, parsedLinesToDocument, sanitizeDocument, type LineElement } from "./core/document.ts";
+import { TRANSPARENT_ID } from "./export/background.ts";
 import { DEFAULT_FRAME } from "./export/layout.ts";
 import { PARAM, fromSearchParams, fromWire, toSearchParams, toWire, type WireWorkspaceV1 } from "./wire.ts";
 import type { Workspace } from "./workspace.ts";
@@ -22,7 +21,53 @@ function workspaceOf(document: LineElement[]): Workspace {
   return { document, themeId: "dracula", backgroundId: "ember", frame, highlight: "ansi" };
 }
 
+/**
+ * What v1 says an unsaid field means — the same numbers as `V1_DEFAULTS` in
+ * wire.ts, deliberately written out again rather than imported.
+ *
+ * These used to be `DEFAULT_FRAME`, `DEFAULT_THEME.id` and
+ * `DEFAULT_BACKGROUND_ID`, which meant the assertions moved whenever the app's
+ * defaults did and passed wherever they landed — so the case that matters most,
+ * a link naming only its content, was the one case nothing was checking. Two
+ * hand-written copies is the point: changing what an old link renders should
+ * take two deliberate edits, in two files, and fail loudly in between.
+ */
+const V1_UNSAID = {
+  theme: "boron",
+  backdrop: "midnight",
+  frame: {
+    framePadding: 48,
+    radius: 12,
+    showChrome: true,
+    title: "",
+    shadowStrength: 100,
+    columns: 80,
+    aspect: null,
+  },
+};
+
 /* ------------------------------------------------------------ round trip -- */
+
+describe("the syntax choice on the wire", () => {
+  it("survives a round trip", () => {
+    const workspace = { ...workspaceOf([{ type: "line", children: [{ text: "x" }] }]), highlight: "python" as const };
+    expect(fromWire(toWire(workspace))?.highlight).toBe("python");
+  });
+
+  it("reads a link that predates the field as auto, not as ansi", () => {
+    // The address bar carries your own workspace now, so a reload comes back
+    // through here. Answering "ansi" would disarm auto-detection on every
+    // refresh, and the reader would have no way to see why.
+    const wire = toWire(workspaceOf([{ type: "line", children: [{ text: "x" }] }]));
+    delete (wire as { syntax?: string }).syntax;
+    expect(fromWire(wire)?.highlight).toBe("auto");
+  });
+
+  it("refuses a syntax nobody can act on", () => {
+    const wire = { ...toWire(workspaceOf([{ type: "line", children: [{ text: "x" }] }])), syntax: "brainfuck" };
+    expect(fromWire(wire)?.highlight).toBe("auto");
+  });
+});
 
 describe("toWire / fromWire", () => {
   it("round-trips a whole workspace", () => {
@@ -126,9 +171,9 @@ describe("toWire / fromWire", () => {
 describe("fromWire defaults and rejection", () => {
   it("fills in every setting a sparse payload leaves out", () => {
     const restored = fromWire({ version: 1, content: "hello" });
-    expect(restored?.themeId).toBe(DEFAULT_THEME.id);
-    expect(restored?.backgroundId).toBe(DEFAULT_BACKGROUND_ID);
-    expect(restored?.frame).toEqual(DEFAULT_FRAME);
+    expect(restored?.themeId).toBe(V1_UNSAID.theme);
+    expect(restored?.backgroundId).toBe(V1_UNSAID.backdrop);
+    expect(restored?.frame).toEqual(V1_UNSAID.frame);
   });
 
   it("refuses anything that is not a v1 payload", () => {
@@ -173,6 +218,13 @@ describe("fromWire defaults and rejection", () => {
  * tests your imagination.
  *
  * Adding an entry is always fine. Editing one means you have broken a link.
+ *
+ * **Every expected value here is a literal, and never a constant.** The first
+ * entry used to assert `frame: DEFAULT_FRAME`, which made the one case that
+ * matters most — a link that names only its content — move in lockstep with the
+ * app's defaults and pass no matter where they went. A corpus that follows the
+ * code it is pinning is not a corpus. If a deliberate change to a default is
+ * meant to reach these links, the failure here is the acknowledgement.
  */
 const CORPUS: readonly { name: string; payload: string; expect: Partial<Workspace> }[] = [
   {
@@ -183,9 +235,20 @@ const CORPUS: readonly { name: string; payload: string; expect: Partial<Workspac
         { type: "line", children: [{ text: "$ ls" }] },
         { type: "line", children: [{ text: "a.txt" }] },
       ],
-      themeId: DEFAULT_THEME.id,
-      backgroundId: DEFAULT_BACKGROUND_ID,
-      frame: DEFAULT_FRAME,
+      // Literals, deliberately: this is the promise a link that says nothing
+      // else is making, and it has to fail here if it ever stops being true.
+      themeId: "boron",
+      backgroundId: "midnight",
+      frame: {
+        framePadding: 48,
+        radius: 12,
+        showChrome: true,
+        title: "",
+        shadowStrength: 100,
+        columns: 80,
+        aspect: null,
+      },
+      highlight: "auto",
     },
   },
   {
@@ -258,11 +321,139 @@ const CORPUS: readonly { name: string; payload: string; expect: Partial<Workspac
     payload: '{"version":1,"content":"x","theme":"no-such-theme-any-more","backdrop":"no-such-backdrop"}',
     expect: {
       document: [{ type: "line", children: [{ text: "x" }] }],
-      themeId: DEFAULT_THEME.id,
-      backgroundId: DEFAULT_BACKGROUND_ID,
+      // Literal for the same reason as the first entry — with an edge the others
+      // do not have. A retired id *has* to land on whatever the default is, so
+      // this is the one case where moving a default legitimately repaints old
+      // links. Naming the value means somebody has to say so out loud.
+      themeId: "boron",
+      backgroundId: "midnight",
+    },
+  },
+  {
+    // Every link the app writes says `aspect=`, which reads back as *unsaid* —
+    // so if "unsaid" ever resolved through a movable default, the day a canvas
+    // became the default would be the day every link ever sent turned into that
+    // card. Absent means free-sized, permanently.
+    name: "no aspect means a free-sized image, not whatever the default canvas is",
+    payload: '{"version":1,"content":"x","frame":{"columns":40}}',
+    expect: {
+      document: [{ type: "line", children: [{ text: "x" }] }],
+      frame: {
+        framePadding: 48,
+        radius: 12,
+        showChrome: true,
+        title: "",
+        shadowStrength: 100,
+        columns: 40,
+        aspect: null,
+      },
+    },
+  },
+  {
+    // A tab cannot survive as a tab — a cell grid has nowhere to put one — so
+    // what matters is that it always lands on the *same* cells. Column four to
+    // the stop at eight.
+    name: "a tab lands on its stop, and stays there",
+    payload: '{"version":1,"content":"col1\\tcol2"}',
+    expect: {
+      document: [{ type: "line", children: [{ text: "col1    col2" }] }],
     },
   },
 ];
+
+/**
+ * The parts of v1 that a *default moving* could silently rewrite. Each of these
+ * is a thing an old link said, or deliberately did not say, and the point is
+ * that nothing the app changes about itself can alter the answer.
+ */
+describe("what an unsaid field is frozen to mean", () => {
+  it("does not follow the app's own defaults", () => {
+    const bare = fromWire({ version: 1, content: "x" })!;
+    expect(bare.themeId).toBe("boron");
+    expect(bare.backgroundId).toBe("midnight");
+    expect(bare.frame).toEqual({
+      framePadding: 48,
+      radius: 12,
+      showChrome: true,
+      title: "",
+      shadowStrength: 100,
+      columns: 80,
+      aspect: null,
+    });
+  });
+
+  /**
+   * The one that was already wrong. A link the app writes says `aspect=`, which
+   * is indistinguishable from saying nothing — so both have to resolve to a
+   * free-sized image by a rule, not by whatever `DEFAULT_FRAME.aspect` happens
+   * to hold. Otherwise defaulting to a card would reshape every link ever sent.
+   */
+  it("reads a blank aspect and an absent one as free-sized, both by rule", () => {
+    const said = fromWire(fromSearchParams(new URLSearchParams("content=x&aspect="), "x"));
+    const unsaid = fromWire(fromSearchParams(new URLSearchParams("content=x"), "x"));
+    expect(said?.frame.aspect).toBeNull();
+    expect(unsaid?.frame.aspect).toBeNull();
+  });
+});
+
+describe("a boolean written by hand", () => {
+  it("takes either vocabulary", () => {
+    for (const yes of ["1", "true", "yes", "on", "TRUE", " on "]) {
+      expect(fromSearchParams(new URLSearchParams(`content=x&titleBar=${yes}`), "x")?.frame?.titleBar, yes).toBe(true);
+    }
+    for (const no of ["0", "false", "no", "off", "OFF"]) {
+      expect(fromSearchParams(new URLSearchParams(`content=x&titleBar=${no}`), "x")?.frame?.titleBar, no).toBe(false);
+    }
+  });
+
+  /**
+   * Not `true`, which is what it used to be. Freezing "any word means on" is a
+   * worse promise than freezing "a word nobody recognizes means the link did not
+   * say" — only the second can be given a meaning later without changing what an
+   * existing link renders.
+   */
+  it("treats a word it does not know as unsaid rather than as true", () => {
+    for (const raw of ["", "banana", "maybe"]) {
+      const frame = fromSearchParams(new URLSearchParams(`content=x&titleBar=${raw}`), "x")?.frame;
+      expect(frame && "titleBar" in frame, JSON.stringify(raw)).toBe(false);
+    }
+  });
+});
+
+/**
+ * A cell grid has nowhere to put a tab, so the question is never whether one
+ * survives — it is whether the app and a link agree about where it lands. They
+ * did not: the RTF and HTML paste parsers hand their text back directly, so a
+ * copy out of Terminal.app could put a raw tab in the document, and only the
+ * link expanded it. Twenty-nine cells became thirty-two on the reader's screen.
+ */
+describe("a character no cell can hold", () => {
+  it("never reaches a document, so a link cannot change one into another", () => {
+    const withTab = parsedLinesToDocument([
+      { spans: [{ text: "col1\tcol2", marks: {} }] },
+    ]);
+    expect(lineText(withTab[0]!)).toBe("col1    col2");
+
+    const workspace = { ...workspaceOf(withTab), frame };
+    expect(lineText(fromWire(toWire(workspace))!.document[0]!)).toBe("col1    col2");
+  });
+
+  it("is taken out of a stored document too, not only a pasted one", () => {
+    const E7 = String.fromCharCode(7);
+    const doc = sanitizeDocument([
+      { type: "line", children: [{ text: `a${E}b` }, { text: `c${E7}d\re` }] },
+    ]);
+    expect(lineText(doc![0]!)).toBe("abcde");
+  });
+
+  it("counts a tab stop across the styled runs of one line, not from each run", () => {
+    const doc = parsedLinesToDocument([
+      { spans: [{ text: "ab", marks: {} }, { text: "\tc", marks: { bold: true } }] },
+    ]);
+    // Two cells in, so the tab runs to column eight: six spaces, not eight.
+    expect(lineText(doc[0]!)).toBe("ab      c");
+  });
+});
 
 describe("the frozen v1 corpus", () => {
   for (const entry of CORPUS) {
@@ -318,15 +509,15 @@ describe("toSearchParams / fromSearchParams", () => {
   it("defaults anything the link leaves out", () => {
     const restored = fromWire(fromSearchParams(new URLSearchParams("theme=nord"), "hello"));
     expect(restored?.themeId).toBe("nord");
-    expect(restored?.backgroundId).toBe(DEFAULT_BACKGROUND_ID);
-    expect(restored?.frame).toEqual(DEFAULT_FRAME);
+    expect(restored?.backgroundId).toBe(V1_UNSAID.backdrop);
+    expect(restored?.frame).toEqual(V1_UNSAID.frame);
   });
 
   /** Adding a setting must never break a link written before it existed. */
   it("ignores a parameter it does not know", () => {
     const restored = fromWire(fromSearchParams(new URLSearchParams("theme=nord&glow=17&utm_source=x"), "hi"));
     expect(restored?.themeId).toBe("nord");
-    expect(restored?.frame).toEqual(DEFAULT_FRAME);
+    expect(restored?.frame).toEqual(V1_UNSAID.frame);
   });
 
   it("takes a missing version as the first one, and refuses a later one", () => {
@@ -345,9 +536,9 @@ describe("toSearchParams / fromSearchParams", () => {
 
   it("falls back to the default rather than NaN when a number is nonsense", () => {
     const restored = fromWire(fromSearchParams(new URLSearchParams("padding=lots&radius=&columns=abc"), "x"));
-    expect(restored?.frame.framePadding).toBe(DEFAULT_FRAME.framePadding);
-    expect(restored?.frame.radius).toBe(DEFAULT_FRAME.radius);
-    expect(restored?.frame.columns).toBe(DEFAULT_FRAME.columns);
+    expect(restored?.frame.framePadding).toBe(V1_UNSAID.frame.framePadding);
+    expect(restored?.frame.radius).toBe(V1_UNSAID.frame.radius);
+    expect(restored?.frame.columns).toBe(V1_UNSAID.frame.columns);
   });
 
   it("still clamps what a hand-written link asks for", () => {

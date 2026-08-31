@@ -1,4 +1,4 @@
-import type { ParsedLine } from "./ansi.ts";
+import { toPrintableCells, type ParsedLine } from "./ansi.ts";
 import { classifyDocument, hasCommands } from "./prompt.ts";
 import { MODIFIER_KEYS, isColor, type Marks, type RenderLine, type RenderSpan, type SpanRole } from "./types.ts";
 
@@ -17,6 +17,34 @@ export function lineText(line: LineElement): string {
 
 export function emptyDocument(): TerminalDocument {
   return [{ type: "line", children: [{ text: "" }] }];
+}
+
+/**
+ * A line from styled runs, with every run put through `toPrintableCells`.
+ *
+ * Every document in the app is assembled here, and that is the whole point of
+ * the function: it is the one place a leaf's text can be checked, so nothing a
+ * terminal cell cannot hold reaches a document by *any* door — a rich-text
+ * paste, a crafted clipboard slice, or a `localStorage` entry written by an
+ * older build.
+ *
+ * A tab is the one that actually bit. `parseAnsi` expands one to the next stop,
+ * but the RTF and HTML paste parsers hand back their text directly, so a copy
+ * out of Terminal.app could put a raw tab in the document — where the preview
+ * drew it as a browser tab advance and a share link, which states the document
+ * as ANSI, brought it back as spaces. Twenty-nine cells became thirty-two, and
+ * the reader's picture was wider than the sender's.
+ */
+export function lineOf(leaves: readonly StyledText[]): LineElement {
+  const children: StyledText[] = [];
+  let column = 0;
+  for (const leaf of leaves) {
+    const cells = toPrintableCells(leaf.text, column);
+    column = cells.column;
+    children.push({ ...leaf, text: cells.text });
+  }
+  // Neither Slate nor ProseMirror will accept an element with no children.
+  return { type: "line", children: children.length > 0 ? children : [{ text: "" }] };
 }
 
 /**
@@ -112,19 +140,19 @@ export function sanitizeDocument(input: unknown): TerminalDocument | null {
       leaves.push({ text: leaf.text, ...sanitizeMarks(leaf) });
     }
 
-    // Slate will not accept an element with no children.
-    lines.push({ type: "line", children: leaves.length > 0 ? leaves : [{ text: "" }] });
+    lines.push(lineOf(leaves));
   }
   return lines;
 }
 
 /** Build a Slate document from parsed terminal lines. */
 export function parsedLinesToDocument(lines: readonly ParsedLine[]): TerminalDocument {
-  const doc = lines.map((line): LineElement => {
-    const children = line.spans
-      .filter((span, index) => span.text.length > 0 || index === 0)
-      .map((span): StyledText => ({ text: span.text, ...span.marks }));
-    return { type: "line", children: children.length > 0 ? children : [{ text: "" }] };
-  });
+  const doc = lines.map((line) =>
+    lineOf(
+      line.spans
+        .filter((span, index) => span.text.length > 0 || index === 0)
+        .map((span): StyledText => ({ text: span.text, ...span.marks })),
+    ),
+  );
   return doc.length > 0 ? doc : emptyDocument();
 }

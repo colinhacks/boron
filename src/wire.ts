@@ -2,8 +2,13 @@ import { parseAnsi } from "./core/ansi.ts";
 import { parsedLinesToDocument, sanitizeDocument, type LineElement } from "./core/document.ts";
 import { toAnsi } from "./core/serialize.ts";
 import type { RenderLine } from "./core/types.ts";
-import { DEFAULT_FRAME } from "./export/layout.ts";
-import { sanitizeBackgroundId, sanitizeFrame, sanitizeThemeId, type Workspace } from "./workspace.ts";
+import {
+  sanitizeBackgroundId,
+  sanitizeFrame,
+  sanitizeHighlight,
+  sanitizeThemeId,
+  type Workspace,
+} from "./workspace.ts";
 
 /**
  * The shareable description of a workspace — the format, not the model.
@@ -54,6 +59,16 @@ export interface WireWorkspaceV1 {
    * not know — as the default backdrop.
    */
   backdrop?: string;
+  /**
+   * What the syntax control reads — `auto`, `ansi`, or a language id.
+   *
+   * A new optional field rather than a v2, the same shape as `theme` above: a
+   * link written before it simply lacks it, and an absent one means `auto`. It
+   * has to travel even though it paints no pixels, because the address bar now
+   * carries your *own* workspace — so a reload goes through here, and a reader
+   * whose refresh silently disarmed auto-detection would have no way to tell.
+   */
+  syntax?: string;
   frame?: WireFrameV1;
 }
 
@@ -91,6 +106,50 @@ export interface WireFrameV1 {
 }
 
 /**
+ * What a v1 link means when it does not say — frozen, and never read from the
+ * app's own defaults again.
+ *
+ * These numbers duplicate `DEFAULT_FRAME` today, and that duplication is the
+ * feature. `DEFAULT_FRAME` is a *product* decision and is free to move: a wider
+ * block, a softer shadow, a card-shaped canvas out of the box. But a link that
+ * left a field out was written against the numbers below, and reading the app's
+ * defaults would repaint every one of those links the day one of them moved —
+ * which is exactly the failure this file was written to prevent, arriving
+ * through the one door left open.
+ *
+ * `aspect` is where it was already live rather than hypothetical. Every link the
+ * app writes says `aspect=` for a free-sized image, which reads back as *unsaid*
+ * — so the moment `DEFAULT_FRAME.aspect` became a preset, every link ever sent
+ * would have turned into that card. `null` here is now a fact about v1 rather
+ * than a value borrowed from somewhere it can change.
+ *
+ * A v2 gets its own block beside this one. This one never changes.
+ */
+const V1_DEFAULTS = {
+  /**
+   * Theme and backdrop are ids rather than values, so this freezes *which name*
+   * an unsaid link gets, not what that name paints. A palette is a design the
+   * app owns; see wiki/share-links.md on why backdrop ids already moved once.
+   */
+  theme: "boron",
+  backdrop: "midnight",
+  padding: 48,
+  radius: 12,
+  titleBar: true,
+  title: "",
+  shadow: 100,
+  columns: 80,
+  aspect: null,
+  /**
+   * `auto` is a frozen concept rather than a movable default — it names the
+   * absence of an answer — so this one could not drift. It is written here
+   * anyway, because a reader should not have to check nine fields against this
+   * block and then work out on their own why the tenth is somewhere else.
+   */
+  syntax: "auto",
+} as const;
+
+/**
  * The document as raw terminal output.
  *
  * Every run is tagged `plain` rather than run through the `$`-prompt heuristic,
@@ -112,6 +171,7 @@ export function toWire(workspace: Workspace): WireWorkspaceV1 {
     content: documentToAnsi(workspace.document),
     theme: workspace.themeId,
     backdrop: workspace.backgroundId,
+    syntax: workspace.highlight,
     // Written out in full, never diffed against the defaults: a link is a promise
     // about an image, and one that repaints because a default moved has broken it.
     frame: {
@@ -155,21 +215,17 @@ export function fromWire(input: unknown): Workspace | null {
   const frame = (typeof wire.frame === "object" && wire.frame !== null ? wire.frame : {}) as WireFrameV1;
   return {
     document,
-    // Not carried on the wire, and deliberately: the syntax choice decides no
-    // pixels, and a link states its content as ANSI — so whatever the sender had
-    // selected, what *arrives* is text that names its own colours. `ansi` is the
-    // true description of it, and it is what a paste of the same bytes would set.
-    highlight: "ansi",
-    themeId: sanitizeThemeId(wire.theme),
-    backgroundId: sanitizeBackgroundId(wire.backdrop),
+    highlight: sanitizeHighlight(wire.syntax ?? V1_DEFAULTS.syntax),
+    themeId: sanitizeThemeId(wire.theme ?? V1_DEFAULTS.theme),
+    backgroundId: sanitizeBackgroundId(wire.backdrop ?? V1_DEFAULTS.backdrop),
     frame: sanitizeFrame({
-      framePadding: frame.padding ?? DEFAULT_FRAME.framePadding,
-      radius: frame.radius ?? DEFAULT_FRAME.radius,
-      showChrome: frame.titleBar ?? DEFAULT_FRAME.showChrome,
-      title: frame.title ?? DEFAULT_FRAME.title,
-      shadowStrength: frame.shadow ?? DEFAULT_FRAME.shadowStrength,
-      columns: frame.columns ?? DEFAULT_FRAME.columns,
-      aspect: frame.aspect ?? DEFAULT_FRAME.aspect,
+      framePadding: frame.padding ?? V1_DEFAULTS.padding,
+      radius: frame.radius ?? V1_DEFAULTS.radius,
+      showChrome: frame.titleBar ?? V1_DEFAULTS.titleBar,
+      title: frame.title ?? V1_DEFAULTS.title,
+      shadowStrength: frame.shadow ?? V1_DEFAULTS.shadow,
+      columns: frame.columns ?? V1_DEFAULTS.columns,
+      aspect: frame.aspect ?? V1_DEFAULTS.aspect,
     }),
   };
 }
@@ -196,6 +252,7 @@ export const PARAM = {
   content: "content",
   theme: "theme",
   backdrop: "backdrop",
+  syntax: "syntax",
   padding: "padding",
   radius: "radius",
   titleBar: "titleBar",
@@ -223,16 +280,40 @@ export function toSearchParams(wire: WireWorkspaceV1, encodedContent: string): U
   params.set(PARAM.content, encodedContent);
   params.set(PARAM.theme, wire.theme ?? "");
   params.set(PARAM.backdrop, wire.backdrop ?? "");
-  params.set(PARAM.padding, String(frame.padding ?? DEFAULT_FRAME.framePadding));
-  params.set(PARAM.radius, String(frame.radius ?? DEFAULT_FRAME.radius));
-  params.set(PARAM.titleBar, (frame.titleBar ?? DEFAULT_FRAME.showChrome) ? "1" : "0");
-  params.set(PARAM.title, frame.title ?? "");
-  params.set(PARAM.shadow, String(frame.shadow ?? DEFAULT_FRAME.shadowStrength));
-  params.set(PARAM.columns, String(frame.columns ?? DEFAULT_FRAME.columns));
+  params.set(PARAM.syntax, wire.syntax ?? "");
+  params.set(PARAM.padding, String(frame.padding ?? V1_DEFAULTS.padding));
+  params.set(PARAM.radius, String(frame.radius ?? V1_DEFAULTS.radius));
+  params.set(PARAM.titleBar, (frame.titleBar ?? V1_DEFAULTS.titleBar) ? "1" : "0");
+  params.set(PARAM.title, frame.title ?? V1_DEFAULTS.title);
+  params.set(PARAM.shadow, String(frame.shadow ?? V1_DEFAULTS.shadow));
+  params.set(PARAM.columns, String(frame.columns ?? V1_DEFAULTS.columns));
   // Empty for a free-sized image, the way an absent theme is written empty:
   // there is no default id to spell out, only the absence of one.
   params.set(PARAM.aspect, frame.aspect ?? "");
   return params;
+}
+
+/**
+ * A boolean the way somebody writes one into a URL by hand.
+ *
+ * Both vocabularies, because a link is meant to be editable in an address bar
+ * and there is no reason to make somebody guess which one this app took. What
+ * matters more is the last line: anything *unrecognized* reads as unsaid rather
+ * than as true, which is the safer half to freeze forever. `titleBar=nope`
+ * meaning "on" is a worse promise to be stuck with than `titleBar=nope` meaning
+ * "the link did not say", because only one of the two can be corrected later
+ * without changing what an existing link renders.
+ */
+const WRITTEN_TRUE = new Set(["1", "true", "yes", "on"]);
+const WRITTEN_FALSE = new Set(["0", "false", "no", "off"]);
+
+function booleanParam(params: URLSearchParams, name: string): boolean | undefined {
+  const raw = params.get(name);
+  if (raw === null) return undefined;
+  const value = raw.trim().toLowerCase();
+  if (WRITTEN_TRUE.has(value)) return true;
+  if (WRITTEN_FALSE.has(value)) return false;
+  return undefined;
 }
 
 function numberParam(params: URLSearchParams, name: string): number | undefined {
@@ -253,16 +334,17 @@ export function fromSearchParams(params: URLSearchParams, decodedContent: string
   // Absent means the first version, so a hand-written link can leave it off.
   if (version !== null && version !== "1") return null;
 
-  const titleBar = params.get(PARAM.titleBar);
+  const titleBar = booleanParam(params, PARAM.titleBar);
   return {
     version: 1,
     content: decodedContent,
     ...(params.get(PARAM.theme) ? { theme: params.get(PARAM.theme)! } : {}),
     ...(params.get(PARAM.backdrop) ? { backdrop: params.get(PARAM.backdrop)! } : {}),
+    ...(params.get(PARAM.syntax) ? { syntax: params.get(PARAM.syntax)! } : {}),
     frame: {
       ...(numberParam(params, PARAM.padding) !== undefined ? { padding: numberParam(params, PARAM.padding)! } : {}),
       ...(numberParam(params, PARAM.radius) !== undefined ? { radius: numberParam(params, PARAM.radius)! } : {}),
-      ...(titleBar !== null && titleBar !== "" ? { titleBar: titleBar !== "0" && titleBar !== "false" } : {}),
+      ...(titleBar !== undefined ? { titleBar } : {}),
       ...(params.get(PARAM.title) !== null ? { title: params.get(PARAM.title)! } : {}),
       ...(numberParam(params, PARAM.shadow) !== undefined ? { shadow: numberParam(params, PARAM.shadow)! } : {}),
       ...(numberParam(params, PARAM.columns) !== undefined ? { columns: numberParam(params, PARAM.columns)! } : {}),
