@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
+import { track } from "@vercel/analytics/react";
 import { documentToRenderLines, type LineElement } from "./core/document.ts";
 import { toAnsi, toChalkSource, toPlainText } from "./core/serialize.ts";
 import { DEFAULT_THEME, themeById } from "./core/themes.ts";
@@ -270,6 +271,9 @@ export function App({ shared }: AppProps = {}) {
       // where it was made once it is out of the page.
       const filename = `boron.sh.${spec.extension}`;
       downloadBlob(blob, filename);
+      // Counted after the work succeeds rather than on the click, so a failed
+      // render or a blocked clipboard never reads as someone exporting.
+      track("Export", { format });
       flash(`Saved ${filename}`);
     } catch (error) {
       flash(error instanceof Error ? error.message : "Export failed");
@@ -280,6 +284,7 @@ export function App({ shared }: AppProps = {}) {
     if (!scene) return;
     try {
       await copyImageToClipboard(scene);
+      track("Copy image");
       flash("Image copied");
     } catch {
       flash("Clipboard blocked — use Save instead");
@@ -296,6 +301,7 @@ export function App({ shared }: AppProps = {}) {
             : toChalkSource(renderLines);
       try {
         await copyText(serialized);
+        track("Copy text", { kind });
         flash(kind === "ansi" ? "ANSI copied" : kind === "text" ? "Text copied" : "chalk source copied");
       } catch {
         flash("Clipboard blocked");
@@ -312,6 +318,7 @@ export function App({ shared }: AppProps = {}) {
   const handleCopyLink = useCallback(async () => {
     try {
       await copyText(await buildShareUrl({ document: value, themeId, backgroundId, frame }, window.location.href));
+      track("Copy link");
       flash("Link copied");
     } catch {
       flash("Clipboard blocked");
