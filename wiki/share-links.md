@@ -47,7 +47,26 @@ The wire names are deliberately not the internal ones: `padding` not `framePaddi
 
 Two lossiness bugs that ANSI-as-a-format would otherwise have had, both fixed and both pinned by a test: `parseAnsi` gained a `trimTrailing` option, because trailing spaces take up cells and dropping them moves where a long line wraps; and the content is serialized from raw marks rather than through the `$`-prompt heuristic, which would otherwise freeze one reading of the document.
 
-The base64/URL layer on top is built too, in [src/share.ts](../src/share.ts): `buildShareUrl` behind "Copy link" in the export button, and `consumeSharedWorkspace` on load. So links ship, and this page is the account of why the *first* attempt did not.
+The base64/URL layer on top is built too, in [src/share.ts](../src/share.ts): `readSharedWorkspace` on load, and two writers. So links ship, and this page is the account of why the *first* attempt did not.
+
+## The address bar tracks the workspace
+
+There are two ways a link gets written, and the difference between them is the only interesting part.
+
+`buildShareUrl` is "Copy link" in the export button — made once, on a button press, and allowed to be enormous. Past `MAX_QUERY_URL_LENGTH` it moves the parameters to the **fragment**, which never reaches a server and so has no practical length limit. A six-hundred-line document copies as an eleven-kilobyte link that reopens all six hundred lines.
+
+`trackingUrl` is what the address bar shows while you edit. It runs on every pause in typing — debounced by `URL_SYNC_DELAY` in [App.tsx](../src/App.tsx), because Safari throws once `replaceState` is called about a hundred times in thirty seconds — so it is a different job with two deliberate differences:
+
+- **No fragment fallback.** An address bar that is re-encoded and rewritten every half second cannot be two hundred kilobytes long, and a document that big has `localStorage` holding it anyway.
+- **Giving up means clearing the parameters, not leaving the last ones that fit.** This is the part that would be a bug if it were done the obvious way: a URL wins over `localStorage` on the next load, so an address left describing the document you had *before* the paste would silently throw the paste away on reload.
+
+Two consequences worth knowing:
+
+**The address is no longer wiped on arrival.** It used to be — `consumeSharedWorkspace` read the link and then cleared it, so that editing what someone sent you and reloading kept your edits rather than snapping back to their picture. Live tracking gets the same thing without the URL going blank, so the read is now a plain `readSharedWorkspace`. Tracking starts on the reader's **first edit**, never on load: rewriting a link on arrival would re-encode a fragment link as a query one, or clear it outright when it was too long to be one, and neither is anything the reader did.
+
+**Only a *fragment* link reopens.** The query string is the app's own handwriting now, so the `hashchange` handler that exists for links pasted into a tab already on Boron has to tell the two apart — `hasFragmentLink` is that test. Without it the app reopens its own address, replacing the document with a copy of itself and costing the undo stack every time.
+
+`highlight` is the one workspace field no link carries. It decides no pixels, and a link states its content as ANSI — so whatever the sender had selected, what arrives is text that names its own colours, and `fromWire` says so by returning `ansi`.
 
 ## Options that were considered
 
