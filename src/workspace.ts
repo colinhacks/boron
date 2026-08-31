@@ -1,4 +1,5 @@
 import { sanitizeDocument, type TerminalDocument } from "./core/document.ts";
+import { isHighlightChoice, type HighlightChoice } from "./core/highlight.ts";
 import { DEFAULT_THEME, themeById } from "./core/themes.ts";
 import {
   DEFAULT_BACKGROUND_ID,
@@ -25,6 +26,16 @@ export interface Workspace {
   themeId: string;
   backgroundId: string;
   frame: FrameSettings;
+  /**
+   * What the syntax control is showing.
+   *
+   * Alone among these fields it decides no pixels — the highlighter writes real
+   * marks, so the document already carries the colors and would draw the same
+   * without this. It is here because it is the reader's *last answer* to the
+   * syntax question, and losing it across a reload would silently re-arm
+   * auto-detection over a document somebody had already settled.
+   */
+  highlight: HighlightChoice;
 }
 
 /* ------------------------------------------------------------ sanitizing -- */
@@ -63,6 +74,15 @@ export function sanitizeFrame(input: unknown): FrameSettings {
 
 export { sanitizeDocument };
 
+/**
+ * An unrecognized choice becomes `auto` rather than a language: guessing a
+ * language on the reader's behalf is exactly what `auto` is for, and pinning one
+ * they never picked would recolor their next paste as it.
+ */
+export function sanitizeHighlight(input: unknown): HighlightChoice {
+  return isHighlightChoice(input) ? input : "auto";
+}
+
 /** An unknown theme falls back to the default rather than to nothing. */
 export function sanitizeThemeId(input: unknown): string {
   return typeof input === "string" ? themeById(input).id : DEFAULT_THEME.id;
@@ -97,5 +117,6 @@ export function sanitizeWorkspace(input: unknown, document: TerminalDocument): W
     themeId: sanitizeThemeId(state.themeId),
     backgroundId: sanitizeBackgroundId(state.backgroundId),
     frame: sanitizeFrame(state.frame),
+    highlight: sanitizeHighlight(state.highlight),
   };
 }

@@ -36,6 +36,22 @@ export function namedColorIndex(name: NamedColor): number {
 }
 
 /**
+ * The SGR parameter that names a color — `30`-`37` for the eight, `90`-`97` for
+ * the bright ones, and the `40`/`100` rows for a background.
+ *
+ * Both places that emit an escape code for a named color come through here:
+ * `toAnsi` on the way out of a document, and the syntax highlighter on the way
+ * in. Two copies of this arithmetic is a bug with a delay on it — nothing throws
+ * when they drift, a highlighted keyword just stops round-tripping to the code
+ * it was written as.
+ */
+export function namedColorSgr(name: NamedColor, background = false): number {
+  const base = background ? 40 : 30;
+  const index = namedColorIndex(name);
+  return index < 8 ? base + index : base + 60 + (index - 8);
+}
+
+/**
  * Build a `Color` from an ANSI 256 index, preferring the named form for 0-15.
  *
  * `null` outside 0-255, because there is no such color. A program only has to

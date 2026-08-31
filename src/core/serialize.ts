@@ -1,4 +1,4 @@
-import { namedColorIndex, parseAnsi256, parseCssColor } from "./palette.ts";
+import { namedColorSgr, parseAnsi256, parseCssColor } from "./palette.ts";
 import { effectiveMarks } from "./style.ts";
 import { isNamedColor, type Color, type Marks, type RenderLine } from "./types.ts";
 
@@ -8,10 +8,7 @@ const RESET = `${ESC}[0m`;
 /** SGR parameters for a foreground color, or background when `background`. */
 function colorCodes(color: Color, background: boolean): string[] {
   const base = background ? 40 : 30;
-  if (isNamedColor(color)) {
-    const index = namedColorIndex(color);
-    return [String(index < 8 ? base + index : base + 60 + (index - 8))];
-  }
+  if (isNamedColor(color)) return [String(namedColorSgr(color, background))];
   const ansi256 = parseAnsi256(color);
   if (ansi256 !== null) return [String(base + 8), "5", String(ansi256)];
   const rgb = parseCssColor(color);

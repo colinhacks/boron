@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
-import { documentToRenderLines, type LineElement } from "./core/document.ts";
+import { track } from "@vercel/analytics/react";
+import { documentToRenderLines, parsedLinesToDocument, type LineElement } from "./core/document.ts";
+import { parseAnsi } from "./core/ansi.ts";
 import { toAnsi, toChalkSource, toPlainText } from "./core/serialize.ts";
 import { DEFAULT_THEME, themeById } from "./core/themes.ts";
 import { BoxSelectionProvider } from "./editor/BoxSelection.tsx";
 import { EditorProvider } from "./editor/context.tsx";
 import { TerminalSurface, type TerminalHandle } from "./editor/TerminalEditor.tsx";
+import { highlightToAnsi, isLanguageId, type HighlightChoice } from "./core/highlight.ts";
 import { ALT_LABEL } from "./ui/platform.ts";
 import {
   DEFAULT_BACKGROUND_ID,
@@ -36,11 +39,12 @@ import { Sidebar } from "./ui/Sidebar.tsx";
 import { SplitButton } from "./ui/SplitButton.tsx";
 import { FloatingToolbar } from "./ui/FloatingToolbar.tsx";
 import { sampleDocument } from "./ui/sample.ts";
-import { buildShareUrl, consumeSharedWorkspace } from "./share.ts";
+import { buildShareUrl, hasFragmentLink, readSharedWorkspace, trackingUrl } from "./share.ts";
 import {
   sanitizeBackgroundId,
   sanitizeDocument,
   sanitizeFrame,
+  sanitizeHighlight,
   sanitizeThemeId,
   type Workspace,
 } from "./workspace.ts";
@@ -76,6 +80,7 @@ function loadPersisted(): Partial<Workspace> {
         ? { backgroundId: sanitizeBackgroundId(state.backgroundId) }
         : {}),
       ...(state.frame && typeof state.frame === "object" ? { frame: sanitizeFrame(state.frame) } : {}),
+      ...(typeof state.highlight === "string" ? { highlight: sanitizeHighlight(state.highlight) } : {}),
     };
   } catch {
     return {};
@@ -95,6 +100,20 @@ function loadPersisted(): Partial<Workspace> {
  * three times this tall.
  */
 const MIN_LEGIBLE_TYPE = 6;
+
+/**
+ * How long editing has to pause before the address bar catches up.
+ *
+ * Not a nicety: Safari throws once `replaceState` is called about a hundred
+ * times in thirty seconds, so a URL written on every keystroke would take the
+ * tab out on a long paragraph. Half a second is comfortably under that even for
+ * someone typing in bursts, and it is short enough that the URL is already right
+ * by the time a hand reaches the address bar to copy it.
+ *
+ * The work behind each one is a DEFLATE pass over the whole document, which is
+ * the other reason not to do it per keystroke.
+ */
+const URL_SYNC_DELAY = 500;
 
 /**
  * The how-to legend under the block — the gestures you would not guess.
@@ -151,6 +170,9 @@ export function App({ shared }: AppProps = {}) {
   const [themeId, setThemeId] = useState(() => shared?.themeId ?? persisted.themeId ?? DEFAULT_THEME.id);
   const [backgroundId, setBackgroundId] = useState(() => shared?.backgroundId ?? persisted.backgroundId ?? DEFAULT_BACKGROUND_ID);
   const [frame, setFrame] = useState<FrameSettings>(() => shared?.frame ?? persisted.frame ?? DEFAULT_FRAME);
+  const [highlight, setHighlight] = useState<HighlightChoice>(
+    () => shared?.highlight ?? persisted.highlight ?? "auto",
+  );
   const [format, setFormat] = useState<ImageFormat>("png");
   const [copyMode, setCopyMode] = useState<CopyMode>("ansi");
   const [fontsReady, setFontsReady] = useState(false);
@@ -210,14 +232,67 @@ export function App({ shared }: AppProps = {}) {
     void ensureFontsLoaded({ icons: true });
   }, [needsIcons]);
 
+  /**
+   * Everything that gets saved, copied as a link, or written to the address bar,
+   * in one object rather than five loose pieces spread over three call sites —
+   * so a new field is added in one place and cannot be left out of one of them.
+   */
+  const workspace = useMemo<Workspace>(
+    () => ({ document: value, themeId, backgroundId, frame, highlight }),
+    [value, themeId, backgroundId, frame, highlight],
+  );
+
   useEffect(() => {
-    const state: Workspace = { document: value, themeId, backgroundId, frame };
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace));
     } catch {
       // Quota or private mode — persistence is a convenience, not a requirement.
     }
-  }, [value, themeId, backgroundId, frame]);
+  }, [workspace]);
+
+  /**
+   * The address bar tracks the workspace, so what is on screen is already
+   * shareable — copy the URL out of the bar and it opens the picture in front of
+   * you. "Copy link" stays, because it is the one that works for a document too
+   * long to fit in a query string, and because nobody looks in an address bar
+   * for a feature.
+   *
+   * It starts on the first edit rather than on load. A link someone was sent is
+   * left exactly as it arrived until the reader changes something — rewriting it
+   * on arrival would re-encode a fragment link as a query one, or clear it
+   * outright when it was too long to be one, and neither is the reader's doing.
+   * The comparison is on identity, which is what makes it survive `StrictMode`
+   * mounting the app twice.
+   */
+  const opened = useRef(workspace).current;
+  useEffect(() => {
+    if (workspace === opened) return;
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void trackingUrl(workspace, window.location.href).then(
+        (url) => {
+          // The guard is ordering, not tidiness: encoding is asynchronous, so
+          // without it a slow pass over a long document could land after a fast
+          // one and leave the bar describing an older draft.
+          if (cancelled) return;
+          try {
+            window.history.replaceState(null, "", url);
+          } catch {
+            // Safari throws once these come too fast, and some origins refuse
+            // them outright. An address bar that has fallen behind is not worth
+            // taking the editor down for.
+          }
+        },
+        () => {},
+      );
+    }, URL_SYNC_DELAY);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [workspace, opened]);
 
   const renderLines = useMemo(() => documentToRenderLines(value), [value]);
   const layout = useMemo(
@@ -270,6 +345,9 @@ export function App({ shared }: AppProps = {}) {
       // where it was made once it is out of the page.
       const filename = `boron.sh.${spec.extension}`;
       downloadBlob(blob, filename);
+      // Counted after the work succeeds rather than on the click, so a failed
+      // render or a blocked clipboard never reads as someone exporting.
+      track("Export", { format });
       flash(`Saved ${filename}`);
     } catch (error) {
       flash(error instanceof Error ? error.message : "Export failed");
@@ -280,6 +358,7 @@ export function App({ shared }: AppProps = {}) {
     if (!scene) return;
     try {
       await copyImageToClipboard(scene);
+      track("Copy image");
       flash("Image copied");
     } catch {
       flash("Clipboard blocked — use Save instead");
@@ -296,6 +375,7 @@ export function App({ shared }: AppProps = {}) {
             : toChalkSource(renderLines);
       try {
         await copyText(serialized);
+        track("Copy text", { kind });
         flash(kind === "ansi" ? "ANSI copied" : kind === "text" ? "Text copied" : "chalk source copied");
       } catch {
         flash("Clipboard blocked");
@@ -308,15 +388,21 @@ export function App({ shared }: AppProps = {}) {
    * A link that reopens this exact picture. Everything the render depends on
    * rides in the URL, so what comes up on the other side is the same image
    * rather than the same document under the reader's own settings.
+   *
+   * Built here rather than read off the address bar, which is usually the same
+   * string: the bar gives up on a document too long for a query string, and this
+   * one falls back to the fragment instead. It is also always current, where the
+   * bar is up to half a second behind.
    */
   const handleCopyLink = useCallback(async () => {
     try {
-      await copyText(await buildShareUrl({ document: value, themeId, backgroundId, frame }, window.location.href));
+      await copyText(await buildShareUrl(workspace, window.location.href));
+      track("Copy link");
       flash("Link copied");
     } catch {
       flash("Clipboard blocked");
     }
-  }, [value, themeId, backgroundId, frame, flash]);
+  }, [workspace, flash]);
 
   const handleCopy = useCallback(async () => {
     if (copyMode === "image") await handleCopyImage();
@@ -330,7 +416,33 @@ export function App({ shared }: AppProps = {}) {
     setThemeId(next.themeId);
     setBackgroundId(next.backgroundId);
     setFrame(next.frame);
+    setHighlight(next.highlight);
   }, []);
+
+  /**
+   * Answer the syntax question by hand.
+   *
+   * Picking a language re-colors what is already in the editor, which is the
+   * whole point of the control — auto-detection declines far more often than it
+   * misfires, so "it guessed wrong, or did not guess" needs a way out that does
+   * not involve re-pasting. `auto` and `ansi` only change what the *next* paste
+   * does: neither has a color to apply, and repainting the document to say so
+   * would throw away either the highlighter's work or the author's own.
+   *
+   * The re-highlight runs from the document's plain text, so it is idempotent —
+   * switching TypeScript to Python and back lands on the same colors — and it
+   * does discard hand edits to the coloring, which is what picking a language
+   * out of a menu asks for.
+   */
+  const applyHighlight = useCallback(
+    (choice: HighlightChoice) => {
+      setHighlight(choice);
+      if (!isLanguageId(choice)) return;
+      const ansi = highlightToAnsi(toPlainText(renderLines), choice);
+      surface.current?.replaceDocument(parsedLinesToDocument(parseAnsi(ansi)));
+    },
+    [renderLines],
+  );
 
   /** Reset means everything — the document and every setting around it. */
   const resetAll = useCallback(() => {
@@ -339,6 +451,7 @@ export function App({ shared }: AppProps = {}) {
       themeId: DEFAULT_THEME.id,
       backgroundId: DEFAULT_BACKGROUND_ID,
       frame: DEFAULT_FRAME,
+      highlight: "auto",
     });
   }, [applyWorkspace]);
 
@@ -349,7 +462,11 @@ export function App({ shared }: AppProps = {}) {
    */
   useEffect(() => {
     const onHashChange = () => {
-      void consumeSharedWorkspace().then((next) => {
+      // Only a link in the *fragment*. The query parameters are this app's own
+      // handwriting now, so reading those back would replace the document with a
+      // copy of itself — and `replaceDocument` costs the undo stack.
+      if (!hasFragmentLink(window.location.href)) return;
+      void readSharedWorkspace(window.location.href).then((next) => {
         if (!next) return;
         applyWorkspace(next);
         flash("Opened a shared link");
@@ -545,6 +662,8 @@ export function App({ shared }: AppProps = {}) {
                       ansi16={ansi16}
                       onChange={handleChange}
                       onSelectionChange={noteEditorChange}
+                      highlight={highlight}
+                      onHighlightChange={setHighlight}
                       theme={theme}
                       fontSize={layout.fontSize}
                       lineHeight={layout.lineHeight}
@@ -609,6 +728,8 @@ export function App({ shared }: AppProps = {}) {
             onBackgroundChange={setBackgroundId}
             frame={frame}
             onFrameChange={handleFrameChange}
+            highlight={highlight}
+            onHighlightChange={applyHighlight}
           />
         </main>
         </BoxSelectionProvider>

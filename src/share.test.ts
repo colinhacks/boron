@@ -3,7 +3,15 @@ import type { LineElement } from "./core/document.ts";
 import { DEFAULT_THEME } from "./core/themes.ts";
 import { DEFAULT_BACKGROUND_ID } from "./export/background.ts";
 import { DEFAULT_FRAME } from "./export/layout.ts";
-import { buildShareUrl, decodeContent, encodeContent, readSharedWorkspace, shareParamsFrom } from "./share.ts";
+import {
+  buildShareUrl,
+  decodeContent,
+  encodeContent,
+  hasFragmentLink,
+  readSharedWorkspace,
+  shareParamsFrom,
+  trackingUrl,
+} from "./share.ts";
 import type { Workspace } from "./workspace.ts";
 
 const workspace: Workspace = {
@@ -22,6 +30,22 @@ const workspace: Workspace = {
     columns: 64,
     aspect: null,
   },
+  highlight: "ansi",
+};
+
+/**
+ * A workspace too big to fit in a query string.
+ *
+ * The rows are deliberately noisy. Five hundred copies of one line deflate down
+ * to a few dozen bytes and sail comfortably under the ceiling — which is the
+ * opposite of what a test about outgrowing it needs.
+ */
+const oversized: Workspace = {
+  ...workspace,
+  document: Array.from({ length: 500 }, (_, line): LineElement => ({
+    type: "line",
+    children: [{ text: `${line} ${Math.PI * line} ${(line * 2654435761) % 1000000}`.repeat(4) }],
+  })),
 };
 
 describe("the content parameter", () => {
@@ -103,18 +127,11 @@ describe("the URL", () => {
   });
 
   it("falls back to the fragment when the query string would get too long", async () => {
-    const big: Workspace = {
-      ...workspace,
-      document: Array.from({ length: 500 }, (_, line): LineElement => ({
-        type: "line",
-        children: [{ text: `${line} ${Math.PI * line} ${(line * 2654435761) % 1000000}`.repeat(4) }],
-      })),
-    };
-    const url = await buildShareUrl(big, "https://boron.sh/");
+    const url = await buildShareUrl(oversized, "https://boron.sh/");
     expect(url.length).toBeGreaterThan(8000);
     expect(url).toContain("#");
     expect(new URL(url).searchParams.has("content")).toBe(false);
-    expect(await readSharedWorkspace(url)).toEqual(big);
+    expect(await readSharedWorkspace(url)).toEqual(oversized);
   });
 
   it("reads from either half of a URL", async () => {
@@ -129,6 +146,66 @@ describe("the URL", () => {
     expect(shareParamsFrom("https://boron.sh/?theme=nord")).toBeNull();
     expect(await readSharedWorkspace("https://boron.sh/")).toBeNull();
     expect(await readSharedWorkspace("not a url")).toBeNull();
+  });
+});
+
+/**
+ * The address bar follows the workspace as it is edited, which is a different
+ * job from making a link on demand: it happens constantly, and whatever it
+ * leaves behind is what the next reload reads.
+ */
+describe("the address the bar tracks", () => {
+  it("is the same link a copy would give, while one fits", async () => {
+    expect(await trackingUrl(workspace, "https://boron.sh/")).toBe(
+      await buildShareUrl(workspace, "https://boron.sh/"),
+    );
+  });
+
+  it("round-trips, so a reload restores what was on screen", async () => {
+    expect(await readSharedWorkspace(await trackingUrl(workspace, "https://boron.sh/"))).toEqual(workspace);
+  });
+
+  /**
+   * The one place it parts company with a copied link. A stale URL is worse than
+   * none: it beats `localStorage` on the next load, so leaving the last one that
+   * fit would silently throw away the paste that outgrew it.
+   */
+  it("clears itself rather than going stale, once the workspace outgrows a query", async () => {
+    const url = await trackingUrl(oversized, "https://boron.sh/?v=1&content=zabc&theme=nord");
+    expect(url).toBe("https://boron.sh/");
+    expect(await readSharedWorkspace(url)).toBeNull();
+
+    // A copy of the same workspace still works — that is what the button is for.
+    expect(await buildShareUrl(oversized, "https://boron.sh/")).toContain("#");
+  });
+
+  it("replaces what was already in the address rather than adding to it", async () => {
+    const url = await trackingUrl(workspace, "https://boron.sh/?theme=dracula&utm=x#v=1&content=zabc");
+    expect(url.includes("#")).toBe(false);
+    expect(new URL(url).searchParams.get("theme")).toBe("dracula");
+    expect(new URL(url).searchParams.getAll("theme")).toHaveLength(1);
+    expect(new URL(url).searchParams.has("utm")).toBe(false);
+  });
+});
+
+/**
+ * Which half of a URL a link is in decides whether the app should reopen it.
+ * The query string is the app's own writing; only a fragment is somebody else's.
+ */
+describe("a link in the fragment", () => {
+  it("is told apart from the parameters the app writes itself", async () => {
+    const tracked = await trackingUrl(workspace, "https://boron.sh/");
+    expect(hasFragmentLink(tracked)).toBe(false);
+
+    const copied = await buildShareUrl(oversized, "https://boron.sh/");
+    expect(copied).toContain("#");
+    expect(hasFragmentLink(copied)).toBe(true);
+  });
+
+  it("is nothing for a bare page, a bare fragment, or a non-URL", () => {
+    expect(hasFragmentLink("https://boron.sh/")).toBe(false);
+    expect(hasFragmentLink("https://boron.sh/#section")).toBe(false);
+    expect(hasFragmentLink("not a url")).toBe(false);
   });
 });
 

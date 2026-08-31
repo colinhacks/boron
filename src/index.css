@@ -853,6 +853,32 @@ kbd {
   border-color: var(--accent);
 }
 
+/*
+ * The one dropdown in the app, so it borrows the text box rather than inventing
+ * a shape. `appearance: none` is what lets the background, radius and border
+ * match — a platform select keeps its own on every OS — and the chevron is a
+ * background image because a pseudo-element cannot be drawn on a `select`.
+ */
+.select-input {
+  appearance: none;
+  padding-right: 26px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+    linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position: calc(100% - 14px) calc(50% + 1px), calc(100% - 9px) calc(50% + 1px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* The list itself is drawn by the OS, which does not inherit the panel's
+   colours — so the options are given one that is legible under both. */
+.select-input option {
+  background: var(--bg-elev-2);
+  color: var(--text);
+}
+
 .toggle-row {
   display: flex;
   gap: 6px;

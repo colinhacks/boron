@@ -155,6 +155,11 @@ export function fromWire(input: unknown): Workspace | null {
   const frame = (typeof wire.frame === "object" && wire.frame !== null ? wire.frame : {}) as WireFrameV1;
   return {
     document,
+    // Not carried on the wire, and deliberately: the syntax choice decides no
+    // pixels, and a link states its content as ANSI — so whatever the sender had
+    // selected, what *arrives* is text that names its own colours. `ansi` is the
+    // true description of it, and it is what a paste of the same bytes would set.
+    highlight: "ansi",
     themeId: sanitizeThemeId(wire.theme),
     backgroundId: sanitizeBackgroundId(wire.backdrop),
     frame: sanitizeFrame({

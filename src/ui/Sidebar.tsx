@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { HIGHLIGHT_LANGUAGES, type HighlightChoice } from "../core/highlight.ts";
 import { THEMES, type Theme } from "../core/themes.ts";
 import {
   BACKGROUNDS,
@@ -124,6 +125,8 @@ export interface SidebarProps {
   onBackgroundChange: (id: string) => void;
   frame: FrameSettings;
   onFrameChange: (patch: Partial<FrameSettings>) => void;
+  highlight: HighlightChoice;
+  onHighlightChange: (choice: HighlightChoice) => void;
 }
 
 export function Sidebar({
@@ -133,6 +136,8 @@ export function Sidebar({
   onBackgroundChange,
   frame,
   onFrameChange,
+  highlight,
+  onHighlightChange,
 }: SidebarProps) {
   const aspect = aspectById(frame.aspect);
   const fill = background && isFillId(background.id) ? background.id : null;
@@ -197,6 +202,46 @@ export function Sidebar({
             </button>
           ))}
         </div>
+      </section>
+
+      {/*
+        Next to the theme, because the two answer the same question from
+        different ends: the theme decides what `green` looks like, and this
+        decides which words are green in the first place.
+      */}
+      <section className="panel">
+        <h2 className="panel__title">Syntax</h2>
+        <Field
+          label="Highlight as"
+          {...(highlight === "auto"
+            ? { hint: "detected on paste" }
+            : highlight === "ansi"
+              ? { hint: "the codes you pasted" }
+              : {})}
+        >
+          <select
+            className="text-input select-input"
+            aria-label="Syntax highlighting"
+            value={highlight}
+            onChange={(event) => onHighlightChange(event.target.value as HighlightChoice)}
+          >
+            <option value="auto">Auto-detect</option>
+            {/*
+              Named for what it *is* rather than for what it turns off. This is
+              what a paste carrying escape codes selects, and those colours have
+              an author — calling the option "None" would invite someone to read
+              it as "no colours" and clear a picture they were handed.
+            */}
+            <option value="ansi">Custom (ANSI)</option>
+            <optgroup label="Language">
+              {HIGHLIGHT_LANGUAGES.map((language) => (
+                <option key={language.id} value={language.id}>
+                  {language.label}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </Field>
       </section>
 
       <section className="panel">

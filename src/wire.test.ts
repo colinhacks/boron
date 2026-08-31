@@ -19,7 +19,7 @@ const frame = {
 };
 
 function workspaceOf(document: LineElement[]): Workspace {
-  return { document, themeId: "dracula", backgroundId: "ember", frame };
+  return { document, themeId: "dracula", backgroundId: "ember", frame, highlight: "ansi" };
 }
 
 /* ------------------------------------------------------------ round trip -- */
