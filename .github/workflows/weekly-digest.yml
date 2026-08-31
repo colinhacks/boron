@@ -1,0 +1,34 @@
+# Mails the weekly traffic digest. Vercel Web Analytics collects the numbers but
+# never sends anything, so this is the part that arrives without being asked.
+#
+# Run it by hand from the Actions tab to check the formatting — tick "dry run"
+# and it prints the mail to the log instead of sending it.
+name: Weekly digest
+
+on:
+  schedule:
+    # Mondays at 15:00 UTC — 8am Pacific in summer, 7am in winter. GitHub runs
+    # scheduled jobs late when the fleet is busy; a digest does not care.
+    - cron: "0 15 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the digest without sending it"
+        type: boolean
+        default: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # No install step: the script speaks to two REST APIs with fetch and pulls
+      # in nothing that is not already in Node.
+      - run: node scripts/weekly-digest.mjs ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          DIGEST_TO: ${{ secrets.DIGEST_TO }}
