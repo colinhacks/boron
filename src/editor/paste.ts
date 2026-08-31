@@ -2,7 +2,12 @@ import { Fragment, Slice } from "prosemirror-model";
 import { Plugin } from "prosemirror-state";
 import { hasAnsi, parseAnsi, type ParsedLine } from "../core/ansi.ts";
 import { MAX_LINES, parsedLinesToDocument } from "../core/document.ts";
-import { autoHighlight, highlightToAnsi, type HighlightChoice } from "../core/highlight.ts";
+import {
+  autoHighlight,
+  highlightToAnsi,
+  type HighlightChoice,
+  type LanguageId,
+} from "../core/highlight.ts";
 import { parseHtmlClipboard } from "../core/html-paste.ts";
 import { parseRtfClipboard } from "../core/rtf-paste.ts";
 import { documentToNode } from "./schema.ts";
@@ -22,16 +27,6 @@ function isOwnClipboardHtml(html: string): boolean {
 }
 
 /**
- * Paste like a terminal.
- *
- * Priority is deliberate: `text/plain` carrying SGR codes beats rich text,
- * because SGR codes *name* their colours (`green`) while HTML has already
- * resolved them to one terminal's particular hex. `text/html` is tried before
- * `text/rtf` because it is the flavour every terminal that writes rich text at
- * all will offer, and on macOS the two say the same thing — the HTML is made out
- * of the RTF. RTF is what is left when nothing made that conversion for us.
- */
-/**
  * The winning flavour's lines, and whether that flavour brought its own colors.
  *
  * The distinction is what the syntax highlighter keys on: text that named its
@@ -42,6 +37,16 @@ type FlavourRead =
   | { lines: ParsedLine[]; styled: true }
   | { lines: ParsedLine[]; styled: false; text: string };
 
+/**
+ * Paste like a terminal.
+ *
+ * Priority is deliberate: `text/plain` carrying SGR codes beats rich text,
+ * because SGR codes *name* their colours (`green`) while HTML has already
+ * resolved them to one terminal's particular hex. `text/html` is tried before
+ * `text/rtf` because it is the flavour every terminal that writes rich text at
+ * all will offer, and on macOS the two say the same thing — the HTML is made out
+ * of the RTF. RTF is what is left when nothing made that conversion for us.
+ */
 function readFlavours(data: DataTransfer, ansi16: readonly string[]): FlavourRead | null {
   const html = data.getData("text/html");
   const text = data.getData("text/plain");
@@ -76,6 +81,20 @@ export function parseClipboard(data: DataTransfer, ansi16: readonly string[]): P
 export interface ClipboardRead {
   lines: ParsedLine[];
   highlight: HighlightChoice;
+  /**
+   * The language auto-detection found, or `null` when it did not decide.
+   *
+   * Detection deliberately leaves `highlight` on `auto` rather than pinning the
+   * language it found: pinning it would disarm detection for every later paste,
+   * so a TypeScript block followed by a Python one would silently colour the
+   * Python as TypeScript. Only a reader choosing a language out of the menu
+   * pins it.
+   *
+   * It is also what the toast says. Naming a language the reader picked
+   * themselves is noise, and so is naming `ansi` for a paste whose colours
+   * arrived with it — the one thing worth a word is the app deciding on its own.
+   */
+  detected: LanguageId | null;
 }
 
 /**
@@ -94,16 +113,20 @@ export function readClipboard(
 ): ClipboardRead | null {
   const read = readFlavours(data, ansi16);
   if (!read) return null;
-  if (read.styled) return { lines: read.lines, highlight: "ansi" };
-  if (choice === "ansi") return { lines: read.lines, highlight: choice };
+  if (read.styled) return { lines: read.lines, highlight: "ansi", detected: null };
+  if (choice === "ansi") return { lines: read.lines, highlight: choice, detected: null };
 
   if (choice !== "auto") {
-    return { lines: parseAnsi(highlightToAnsi(read.text, choice)), highlight: choice };
+    return {
+      lines: parseAnsi(highlightToAnsi(read.text, choice)),
+      highlight: choice,
+      detected: null,
+    };
   }
 
-  const detected = autoHighlight(read.text);
-  if (!detected) return { lines: read.lines, highlight: "auto" };
-  return { lines: parseAnsi(detected.ansi), highlight: detected.language };
+  const found = autoHighlight(read.text);
+  if (!found) return { lines: read.lines, highlight: "auto", detected: null };
+  return { lines: parseAnsi(found.ansi), highlight: "auto", detected: found.language };
 }
 
 /**
@@ -126,7 +149,7 @@ export interface PasteOptions {
   /** What the syntax control reads right now — read at paste time, not captured. */
   highlight: () => HighlightChoice;
   /** Fires when a paste decides the syntax question, so the control can follow. */
-  onHighlight: (choice: HighlightChoice) => void;
+  onHighlight: (choice: HighlightChoice, detected: LanguageId | null) => void;
 }
 
 export function pastePlugin({ ansi16, highlight, onHighlight }: PasteOptions): Plugin {
@@ -142,7 +165,7 @@ export function pastePlugin({ ansi16, highlight, onHighlight }: PasteOptions): P
 
         event.preventDefault();
         view.dispatch(view.state.tr.replaceSelection(sliceFor(read.lines)).scrollIntoView());
-        onHighlight(read.highlight);
+        onHighlight(read.highlight, read.detected);
         return true;
       },
 
@@ -173,7 +196,7 @@ export function pastePlugin({ ansi16, highlight, onHighlight }: PasteOptions): P
         event.preventDefault();
         view.dispatch(view.state.tr.replace(at.pos, at.pos, sliceFor(read.lines)).scrollIntoView());
         view.focus();
-        onHighlight(read.highlight);
+        onHighlight(read.highlight, read.detected);
         return true;
       },
     },

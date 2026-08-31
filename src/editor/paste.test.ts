@@ -74,7 +74,7 @@ describe("what a paste does to the syntax control", () => {
 
   it("highlights unstyled code and names the language it found", () => {
     const result = read({ "text/plain": 'const parse = (s: string) => s.split("");\nexport default parse;' });
-    expect(result?.highlight).toBe("typescript");
+    expect(result?.detected).toBe("typescript");
     expect(colorsOf(result!.lines).size).toBeGreaterThan(1);
   });
 
@@ -107,5 +107,37 @@ describe("what a paste does to the syntax control", () => {
   it("never highlights rich text, which already stated its own colours", () => {
     const result = read({ "text/rtf": TERMINAL_APP_2_15_RTF });
     expect(result?.highlight).toBe("ansi");
+  });
+
+  /**
+   * `detected` drives the toast, so it has to mean "the app chose this on its
+   * own" and nothing looser. Announcing a language the reader picked from the
+   * menu, or announcing `ansi` for a paste whose colours arrived with it, is
+   * noise — and a paste that changed nothing must stay silent.
+   */
+  describe("which pastes announce themselves", () => {
+    it("reports a language it detected", () => {
+      expect(read({ "text/plain": 'const parse = (s: string) => s.split("");\nexport default parse;' })?.detected).toBe("typescript");
+    });
+
+    it("leaves the control on auto after detecting, so the next paste detects too", () => {
+      // Pinning the detected language would silently colour a Python paste as
+      // TypeScript for the rest of the session.
+      const result = read({ "text/plain": 'const parse = (s: string) => s.split("");\nexport default parse;' });
+      expect(result?.highlight).toBe("auto");
+    });
+
+    it("stays quiet about a language the reader picked", () => {
+      expect(read({ "text/plain": "x = 1" }, "python")?.detected).toBeNull();
+    });
+
+    it("stays quiet when the paste brought its own colours", () => {
+      expect(read({ "text/plain": "\u001b[32mconst\u001b[39m x = 1;" })?.detected).toBeNull();
+      expect(read({ "text/rtf": TERMINAL_APP_2_15_RTF })?.detected).toBeNull();
+    });
+
+    it("stays quiet when nothing was detected and the paste landed as-is", () => {
+      expect(read({ "text/plain": "$ git status\nOn branch main" })?.detected).toBeNull();
+    });
   });
 });

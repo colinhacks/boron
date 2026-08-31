@@ -7,7 +7,13 @@ import { DEFAULT_THEME, themeById } from "./core/themes.ts";
 import { BoxSelectionProvider } from "./editor/BoxSelection.tsx";
 import { EditorProvider } from "./editor/context.tsx";
 import { TerminalSurface, type TerminalHandle } from "./editor/TerminalEditor.tsx";
-import { highlightToAnsi, isLanguageId, type HighlightChoice } from "./core/highlight.ts";
+import {
+  highlightToAnsi,
+  isLanguageId,
+  languageLabel,
+  type HighlightChoice,
+  type LanguageId,
+} from "./core/highlight.ts";
 import { ALT_LABEL } from "./ui/platform.ts";
 import {
   DEFAULT_BACKGROUND_ID,
@@ -173,6 +179,14 @@ export function App({ shared }: AppProps = {}) {
   const [highlight, setHighlight] = useState<HighlightChoice>(
     () => shared?.highlight ?? persisted.highlight ?? "auto",
   );
+  /**
+   * The language the last paste was detected as, for the control to show.
+   *
+   * Not part of the workspace and not persisted: it describes a thing that just
+   * happened rather than a setting, and `highlight` stays on `auto` through a
+   * detection so the next paste is detected too.
+   */
+  const [detectedLanguage, setDetectedLanguage] = useState<LanguageId | null>(null);
   const [format, setFormat] = useState<ImageFormat>("png");
   const [copyMode, setCopyMode] = useState<CopyMode>("ansi");
   const [fontsReady, setFontsReady] = useState(false);
@@ -437,11 +451,26 @@ export function App({ shared }: AppProps = {}) {
   const applyHighlight = useCallback(
     (choice: HighlightChoice) => {
       setHighlight(choice);
+      setDetectedLanguage(null);
       if (!isLanguageId(choice)) return;
       const ansi = highlightToAnsi(toPlainText(renderLines), choice);
       surface.current?.replaceDocument(parsedLinesToDocument(parseAnsi(ansi)));
     },
     [renderLines],
+  );
+
+  /**
+   * What a paste decided about syntax, and a word about it when it decided by
+   * itself. Detection is the only branch that says anything: the reader picked
+   * the other two, so naming them back is noise.
+   */
+  const handlePasteHighlight = useCallback(
+    (choice: HighlightChoice, detected: LanguageId | null) => {
+      setHighlight(choice);
+      setDetectedLanguage(detected);
+      if (detected) flash(`Language detected: ${languageLabel(detected)}`);
+    },
+    [flash],
   );
 
   /** Reset means everything — the document and every setting around it. */
@@ -663,7 +692,7 @@ export function App({ shared }: AppProps = {}) {
                       onChange={handleChange}
                       onSelectionChange={noteEditorChange}
                       highlight={highlight}
-                      onHighlightChange={setHighlight}
+                      onHighlightChange={handlePasteHighlight}
                       theme={theme}
                       fontSize={layout.fontSize}
                       lineHeight={layout.lineHeight}
@@ -729,6 +758,7 @@ export function App({ shared }: AppProps = {}) {
             frame={frame}
             onFrameChange={handleFrameChange}
             highlight={highlight}
+            detectedLanguage={detectedLanguage}
             onHighlightChange={applyHighlight}
           />
         </main>

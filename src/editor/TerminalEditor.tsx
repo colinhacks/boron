@@ -6,7 +6,7 @@ import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type MouseEvent, type Ref } from "react";
 import type { LineElement, TerminalDocument } from "../core/document.ts";
-import type { HighlightChoice } from "../core/highlight.ts";
+import type { HighlightChoice, LanguageId } from "../core/highlight.ts";
 import type { Theme } from "../core/themes.ts";
 import { FONT_FAMILY } from "../export/fonts.ts";
 import { boxFragment, boxText, cellAt, deleteBox } from "./box.ts";
@@ -43,7 +43,7 @@ export interface TerminalSurfaceProps {
   /** What the syntax control reads, which decides how an unstyled paste is colored. */
   highlight: HighlightChoice;
   /** Fires when a paste answers the syntax question for itself. */
-  onHighlightChange?: (choice: HighlightChoice) => void;
+  onHighlightChange?: (choice: HighlightChoice, detected: LanguageId | null) => void;
   handle?: Ref<TerminalHandle>;
 }
 
@@ -129,7 +129,7 @@ export function TerminalSurface({
         pastePlugin({
           ansi16: () => latest.current.ansi16(),
           highlight: () => latest.current.highlight,
-          onHighlight: (choice) => latest.current.onHighlightChange?.(choice),
+          onHighlight: (choice, detected) => latest.current.onHighlightChange?.(choice, detected),
         }),
         history(),
         keymap({
