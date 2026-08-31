@@ -1,6 +1,6 @@
 import { clampChroma, converter, formatHex, modeOklch, modeRgb, useMode } from "culori/fn";
 import { THEMES, type Theme } from "../core/themes.ts";
-import { isFillId, type Background } from "./background.ts";
+import { BACKGROUNDS, isFillId, type Background } from "./background.ts";
 
 // Imported from `culori/fn` rather than `culori`, which registers every colour
 // space the library ships and costs more in the bundle than this whole file.
@@ -12,18 +12,29 @@ const oklch = converter("oklch");
 /**
  * Backdrops adapted to the theme in front of them.
  *
- * The eight backdrops used to be fixed hex stops, which meant one gradient had
- * to sit behind eight palettes of wildly different character. Against a muted
- * profile like Nord — whose accents run at half the chroma of VS Code's — a
- * fully saturated Ember read as someone else's wallpaper behind the block.
- *
- * So a backdrop is a *role* rather than a fixed appearance: Ember is "the warm
+ * A backdrop is a *role* rather than a fixed appearance: Ember is "the warm
  * one", and what warm means is re-derived from whichever palette is selected.
- * Every stop is rebuilt out of the theme's own accent hues, which is what makes
- * the backdrop and the text on the block look like they came from one place.
+ * That much survived from the first version of this file. What changed is *how*
+ * the hues are re-derived.
  *
- * All of it happens in OKLCH, so "half as saturated" and "a little lighter" are
- * perceptual moves rather than arithmetic on hex that lands somewhere else.
+ * The first version snapped each stop to its nearest theme accent, one gradient
+ * at a time — and a per-gradient choice cannot see the other seven. On a palette
+ * with only two hues in a region, two neighbouring backdrops chose the same
+ * pair: Mint and Arctic both came out green-to-cyan on Boron and Dracula,
+ * distinguishable only by lightness. Two swatches in the picker read as one
+ * option shown twice.
+ *
+ * So the hues are now allocated jointly, from a construction that cannot
+ * collide. The theme's accent hues, folded into families and sorted, divide the
+ * hue wheel into arcs — one arc between each pair of neighbouring accents. The
+ * six chromatic backdrops take six *distinct* arcs, matched to their authored
+ * anchors in circular order, and each gradient sweeps a window inside its own
+ * arc. Distinct arcs are disjoint, so no two backdrops can render the same hue
+ * pair on any palette — the guarantee is structural rather than a tuned
+ * constant, and `background.test.ts` holds the perceptual line on top of it.
+ *
+ * Everything happens in OKLCH, so "half as saturated" and "a little lighter"
+ * are perceptual moves rather than arithmetic on hex that lands somewhere else.
  */
 
 /**
@@ -41,26 +52,21 @@ const ACHROMATIC = 0.03;
  * its own hues, following only the theme's lightness.
  *
  * Judged per gradient rather than per stop, because Graphite's two greys sit at
- * 0.039 — over the per-stop line, so each end was being handed a *different*
- * theme accent and the neutral backdrop quietly acquired a hue sweep. Every
- * backdrop that is actually about its colour starts at 0.11, so the gap is wide.
+ * 0.039 — over the per-stop line — and Sand's light end clamps *under* it while
+ * the gradient as a whole is plainly a colour. Every backdrop that is actually
+ * about its colour peaks well above this; Graphite peaks at 0.039.
  */
 const NEUTRAL_GRADIENT = 0.08;
 
-/** Two accents closer than this are the same hue as far as a gradient cares. */
-const SAME_HUE = 12;
-
 /**
- * How hard the stop selection fights to keep the gradient's original sweep,
- * against how near each stop lands to where it started.
- *
- * At zero each stop simply takes its own nearest accent, which quietly halves
- * the sweep — Ember's 47° of hue travel came out at 23° on Nord, and that
- * flattening is what made the result look muddy rather than adapted. At 2 the
- * spans come back within a few degrees of the original and the choice stops
- * moving; 3 picks the same stops as 2.
+ * Two accents closer than this are one hue family, and only one of them anchors
+ * an arc. Dracula's two cyans sit 17° apart; treating them as two accents made
+ * an arc so narrow the gradient living in it was effectively flat. Folding at a
+ * family width also puts a floor under every arc: neighbouring accents that
+ * survive the fold are at least this far apart, so every gradient keeps at
+ * least this much sweep.
  */
-const SPAN_WEIGHT = 2;
+const HUE_FAMILY = 24;
 
 /**
  * How far a backdrop follows its theme's own lightness. Holding the gap between
@@ -71,13 +77,18 @@ const LIGHTNESS_TRACKING = 0.45;
 
 /**
  * Scores are compared with a tolerance rather than exactly, because two
- * selections that are the same choice on paper can land a float apart.
+ * assignments that are the same choice on paper can land a float apart.
  */
 const EPSILON = 1e-9;
 
 /** Shortest signed angle from `a` to `b`, in degrees. */
 function hueDelta(a: number, b: number): number {
   return ((((b - a) % 360) + 540) % 360) - 180;
+}
+
+/** Shortest distance between two hues, in degrees. */
+function hueDistance(a: number, b: number): number {
+  return Math.abs(hueDelta(a, b));
 }
 
 /**
@@ -93,16 +104,11 @@ function isEarlier(a: readonly number[], b: readonly number[]): boolean {
 }
 
 /**
- * Hues are rounded before anything compares them, so that neither the fold
- * below nor a tie above can turn on a difference too small to see.
+ * Hues are rounded before anything compares them, so that neither the fold nor
+ * a tie can turn on a difference too small to see.
  */
 function quantize(hue: number): number {
   return Math.round(hue * 100) / 100;
-}
-
-/** Total hue travelled along a run of stops — Ember's warm-to-pink sweep. */
-function hueSpan(hues: readonly number[]): number {
-  return hues.slice(1).reduce((sum, hue, index) => sum + Math.abs(hueDelta(hues[index]!, hue)), 0);
 }
 
 function median(values: readonly number[]): number {
@@ -112,7 +118,7 @@ function median(values: readonly number[]): number {
 interface Character {
   /** Median chroma of the theme's accents — how saturated it runs. */
   chroma: number;
-  /** Its accent hues, with near-duplicates folded together. */
+  /** Its accent hues, folded into families and sorted ascending. */
   hues: number[];
   /** Lightness of the block itself. */
   backgroundLightness: number;
@@ -126,8 +132,9 @@ function characterize(theme: Theme): Character {
   for (const accent of accents) {
     if (accent.h === undefined) continue;
     const hue = quantize(accent.h);
-    if (!hues.some((seen) => Math.abs(hueDelta(hue, seen)) < SAME_HUE)) hues.push(hue);
+    if (!hues.some((seen) => hueDistance(hue, seen) < HUE_FAMILY)) hues.push(hue);
   }
+  hues.sort((a, b) => a - b);
   return {
     chroma: accents.length ? median(accents.map((accent) => accent.c)) : 0,
     hues,
@@ -155,48 +162,170 @@ const REFERENCE = {
   backgroundLightness: median(THEMES.map((theme) => characterOf(theme).backgroundLightness)),
 };
 
-/** Every ordered selection of `length` distinct values. */
-function permutations<T>(values: readonly T[], length: number): T[][] {
-  if (length === 0) return [[]];
-  const out: T[][] = [];
-  values.forEach((value, index) => {
-    const rest = values.filter((_, other) => other !== index);
-    for (const tail of permutations(rest, length - 1)) out.push([value, ...tail]);
-  });
-  return out;
+interface Role {
+  id: string;
+  /** Hue at the middle of the authored sweep, in degrees. */
+  anchor: number;
+  /** How much hue the authored gradient travels. */
+  sweep: number;
 }
 
 /**
- * The theme accents to build this gradient from, chosen as a *set* rather than
- * one stop at a time: distinct hues, assigned in order, scored on how near each
- * lands to its original and how well the selection preserves the sweep.
- *
- * Picking each stop's nearest accent independently is the obvious thing and the
- * wrong one — both ends of a narrow gradient get pulled toward whichever accent
- * they share a neighbourhood with, and the gradient flattens.
+ * The chromatic backdrops as roles, read off their authored stops and kept in
+ * circular anchor order — the same order the arcs come in, which is what lets
+ * the assignment walk both in step.
  */
-function chooseHues(original: readonly number[], palette: readonly number[]): number[] | null {
-  if (!original.length || palette.length < original.length) return null;
-  let best: number[] | null = null;
+const ROLES: readonly Role[] = BACKGROUNDS.filter(
+  (background) => Math.max(...background.stops.map((stop) => oklch(stop)?.c ?? 0)) >= NEUTRAL_GRADIENT,
+)
+  .map((background) => {
+    const first = oklch(background.stops[0]!)!;
+    const last = oklch(background.stops.at(-1)!)!;
+    const travel = hueDelta(first.h!, last.h!);
+    return {
+      id: background.id,
+      anchor: quantize((((first.h! + travel / 2) % 360) + 360) % 360),
+      sweep: Math.abs(travel),
+    };
+  })
+  .sort((a, b) => a.anchor - b.anchor);
+
+interface Arc {
+  /** Hue where the arc begins; it runs clockwise. */
+  start: number;
+  /** How many degrees it covers. */
+  span: number;
+}
+
+/**
+ * The arcs between neighbouring accents, with the widest gaps split until there
+ * are enough for every role. Splitting only ever happens on a palette with
+ * fewer hue families than there are chromatic backdrops — none of the shipped
+ * themes — but a sparse palette still owes every role its own arc.
+ */
+function arcsOf(character: Character): Arc[] {
+  const hues = [...character.hues];
+  while (hues.length > 0 && hues.length < ROLES.length) {
+    let widest = 0;
+    let widestSpan = -1;
+    for (let i = 0; i < hues.length; i++) {
+      const span = i + 1 < hues.length ? hues[i + 1]! - hues[i]! : hues[0]! + 360 - hues[i]!;
+      if (span > widestSpan + EPSILON) {
+        widest = i;
+        widestSpan = span;
+      }
+    }
+    hues.push(quantize((hues[widest]! + widestSpan / 2) % 360));
+    hues.sort((a, b) => a - b);
+  }
+  return hues.map((hue, index) => ({
+    start: hue,
+    span: index + 1 < hues.length ? hues[index + 1]! - hue : hues[0]! + 360 - hue,
+  }));
+}
+
+interface Window {
+  /** Hue at the first stop. */
+  from: number;
+  /** Signed travel to the last stop; always clockwise. */
+  sweep: number;
+}
+
+/**
+ * Where inside its arc a role's gradient actually sweeps. The arc is the
+ * allocation; the window is the part of it the gradient uses, slid toward the
+ * role's authored anchor so the name stays true. On Boron the yellow-to-green
+ * arc belongs to Sand, whose anchor is gold — the window hugs the yellow end
+ * rather than centring on the arc and dragging Sand into lime.
+ */
+function windowFor(role: Role, arc: Arc): Window {
+  const sweep = Math.min(arc.span, role.sweep);
+  const low = sweep / 2;
+  const high = arc.span - sweep / 2;
+  const anchorOffset = (((role.anchor - arc.start) % 360) + 360) % 360;
+  let centerOffset: number;
+  if (anchorOffset >= low && anchorOffset <= high) {
+    centerOffset = anchorOffset;
+  } else {
+    const toLow = hueDistance(role.anchor, arc.start + low);
+    const toHigh = hueDistance(role.anchor, arc.start + high);
+    centerOffset = toLow <= toHigh ? low : high;
+  }
+  const center = arc.start + centerOffset;
+  return { from: quantize((((center - sweep / 2) % 360) + 360) % 360), sweep };
+}
+
+/**
+ * Which arc each chromatic backdrop sweeps on this theme, decided for the set
+ * at once: every circular-order-preserving assignment of roles to distinct arcs
+ * is scored on how near each window can get to its role's anchor, and the best
+ * one wins. Preserving circular order is what keeps the picker reading as one
+ * wheel — Mint is never suddenly on the far side of Arctic — and distinctness
+ * needs no score at all, because two roles cannot be given the same arc.
+ */
+function assignmentFor(theme: Theme): Map<string, Window> {
+  const arcs = arcsOf(characterOf(theme));
+  const assignment = new Map<string, Window>();
+  if (arcs.length < ROLES.length) return assignment;
+  let best: Window[] | null = null;
   let bestScore = Infinity;
-  for (const candidate of permutations(palette, original.length)) {
-    const fit = candidate.reduce((sum, hue, index) => sum + Math.abs(hueDelta(original[index]!, hue)), 0);
-    const score = fit + SPAN_WEIGHT * Math.abs(hueSpan(candidate) - hueSpan(original));
-    if (score < bestScore - EPSILON) {
-      bestScore = score;
-      best = candidate;
-    } else if (best && score <= bestScore + EPSILON && isEarlier(candidate, best)) {
-      // Ties are real and they are common: Midnight's two stops on Nord score
-      // identically whether they take 249→217 or 217→249. Broken by the hue
-      // sequence itself rather than by whichever the enumeration reached first,
-      // because that order is not stable across engines — and a backdrop that
-      // resolves differently in the preview, the PNG and a shared link is worse
-      // than either choice.
-      bestScore = Math.min(bestScore, score);
-      best = candidate;
+  for (const subset of subsets(arcs.length, ROLES.length)) {
+    for (let rotation = 0; rotation < ROLES.length; rotation++) {
+      const windows = ROLES.map((role, index) => windowFor(role, arcs[subset[(index + rotation) % ROLES.length]!]!));
+      const score = windows.reduce(
+        (sum, window, index) => sum + hueDistance(ROLES[index]!.anchor, window.from + window.sweep / 2),
+        0,
+      );
+      const centers = windows.map((window) => quantize(window.from));
+      if (
+        score < bestScore - EPSILON ||
+        (best !== null &&
+          score <= bestScore + EPSILON &&
+          isEarlier(
+            centers,
+            best.map((window) => quantize(window.from)),
+          ))
+      ) {
+        // Ties are broken by the hue sequence itself rather than by whichever
+        // the enumeration reached first, because that order is not stable
+        // across engines — and a backdrop that resolves differently in the
+        // preview, the PNG and a shared link is worse than either choice.
+        bestScore = Math.min(bestScore, score);
+        best = windows;
+      }
     }
   }
-  return best;
+  for (const [index, role] of ROLES.entries()) assignment.set(role.id, best![index]!);
+  return assignment;
+}
+
+/** Every `length`-sized selection of indices below `count`, in index order. */
+function subsets(count: number, length: number): number[][] {
+  const out: number[][] = [];
+  const pick = (from: number, acc: number[]) => {
+    if (acc.length === length) {
+      out.push([...acc]);
+      return;
+    }
+    for (let i = from; i < count; i++) {
+      acc.push(i);
+      pick(i + 1, acc);
+      acc.pop();
+    }
+  };
+  pick(0, []);
+  return out;
+}
+
+const assignments = new Map<string, Map<string, Window>>();
+
+function assignmentOf(theme: Theme): Map<string, Window> {
+  let assignment = assignments.get(theme.id);
+  if (!assignment) {
+    assignment = assignmentFor(theme);
+    assignments.set(theme.id, assignment);
+  }
+  return assignment;
 }
 
 function adapt(background: Background, theme: Theme): Background {
@@ -206,26 +335,20 @@ function adapt(background: Background, theme: Theme): Background {
 
   const source = background.stops.map((stop) => oklch(stop));
   const neutral = Math.max(...source.map((color) => color?.c ?? 0)) < NEUTRAL_GRADIENT;
-  const chromatic = source.filter((color) => color !== undefined && color.c >= ACHROMATIC && color.h !== undefined);
-  const chosen = neutral
-    ? null
-    : chooseHues(
-        chromatic.map((color) => quantize(color!.h!)),
-        character.hues,
-      );
+  const window = neutral ? undefined : assignmentOf(theme).get(background.id);
 
-  let next = 0;
   const stops = source.map((color, index) => {
     if (!color) return background.stops[index]!;
     const l = Math.max(0.05, Math.min(0.95, color.l + shift));
     // Greys and near-greys — Graphite, Ink — have no hue to re-derive, so they
-    // only follow the theme's lightness.
-    if (!chosen || color.c < ACHROMATIC || color.h === undefined) {
+    // only follow the theme's lightness. So does a stop with no hue of its own,
+    // and every backdrop on the one palette too grey to yield any arcs at all.
+    if (!window || color.c < ACHROMATIC || color.h === undefined) {
       return formatHex(clampChroma({ ...color, l }, "oklch"));
     }
-    return formatHex(
-      clampChroma({ mode: "oklch", l, c: Math.min(color.c, ceiling), h: chosen[next++]! }, "oklch"),
-    );
+    const t = source.length === 1 ? 0.5 : index / (source.length - 1);
+    const h = (((window.from + window.sweep * t) % 360) + 360) % 360;
+    return formatHex(clampChroma({ mode: "oklch", l, c: Math.min(color.c, ceiling), h }, "oklch"));
   });
 
   return { ...background, stops };

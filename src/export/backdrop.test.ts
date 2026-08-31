@@ -51,16 +51,16 @@ describe("themedBackground", () => {
   });
 
   /**
-   * Midnight's two stops score identically on Nord whether they take 249°→217°
-   * or 217°→249°, so before the tie-break was made explicit the winner came down
-   * to the order the candidates happened to be generated in — and that differed
-   * between Node and the browser. A backdrop that resolves one way in the
-   * preview and another in the exported PNG is worse than either resolution, so
-   * these are pinned rather than merely asserted to be self-consistent.
+   * Two arc assignments can score identically, and before the tie-break was
+   * made explicit the winner came down to the order the candidates happened to
+   * be generated in — which differed between Node and the browser. A backdrop
+   * that resolves one way in the preview and another in the exported PNG is
+   * worse than either resolution, so these are pinned rather than merely
+   * asserted to be self-consistent.
    */
   it("settles ties the same way everywhere", () => {
-    expect(themedBackground(backgroundById("midnight")!, nord)!.stops).toEqual(["#007b7a", "#174c79"]);
-    expect(themedBackground(ember, nord)!.stops).toEqual(["#c0757b", "#846620"]);
+    expect(themedBackground(backgroundById("midnight")!, nord)!.stops).toEqual(["#3c6e9e", "#543b72"]);
+    expect(themedBackground(ember, nord)!.stops).toEqual(["#c0757b", "#8d6026"]);
   });
 
   it("runs a muted theme's backdrop less saturated than a vivid one's", () => {
@@ -72,17 +72,19 @@ describe("themedBackground", () => {
   });
 
   /**
-   * The regression that matters, and it is specifically about *compression*.
-   * Choosing each stop's nearest accent one at a time pulled both ends of a
-   * gradient toward whichever accent they shared a neighbourhood with, and the
-   * sweep collapsed — on Nord, Ember's 47° of hue travel came out at 23°, Mint's
-   * 58° at 23°. That flattening is what read as muddy rather than adapted.
+   * The failure this guards is *compression* — a gradient too narrow to read as
+   * a gradient, which is what looked muddy rather than adapted. The first
+   * adapter could crowd both stops onto one accent's neighbourhood; the arc
+   * system floors the sweep structurally instead: accents that survive the
+   * hue-family fold are at least 24° apart, so every arc — and every gradient
+   * living in one — is at least that wide. The bound sits under the fold width
+   * only because a hex round-trip nudges hues by a degree or two.
    *
-   * A gradient coming out *wider* than it went in is not that failure and is
-   * left alone: Arctic opens from 53° to 89° on Dracula, whose accents are
-   * simply spaced that way, and it looks like Arctic.
+   * The ceiling is the authored sweep itself: a window never travels farther
+   * than the gradient it re-derives, so a backdrop cannot smear across half the
+   * wheel on a sparsely-hued palette.
    */
-  it("never flattens a gradient's hue sweep", () => {
+  it("keeps every gradient's hue sweep between the family floor and its authored width", () => {
     for (const background of BACKGROUNDS) {
       // Graphite and Ink carry no hue to preserve — `themedBackground` holds
       // them neutral on purpose, and "leaves the neutral backdrops neutral"
@@ -90,24 +92,36 @@ describe("themedBackground", () => {
       if (isNeutral(background.stops)) continue;
       const original = hueSpan(background.stops);
       for (const theme of THEMES) {
-        const themed = themedBackground(background, theme)!;
-        const ratio = hueSpan(themed.stops) / original;
-        expect(
-          ratio,
-          `${background.id} on ${theme.id}: ${original.toFixed(0)}° became ${hueSpan(themed.stops).toFixed(0)}°`,
-        ).toBeGreaterThan(0.5);
+        const sweep = hueSpan(themedBackground(background, theme)!.stops);
+        expect(sweep, `${background.id} on ${theme.id}: ${original.toFixed(0)}° became ${sweep.toFixed(0)}°`).toBeGreaterThan(20);
+        expect(sweep, `${background.id} on ${theme.id}: ${original.toFixed(0)}° became ${sweep.toFixed(0)}°`).toBeLessThan(original + 5);
       }
     }
   });
 
-  /** Nord is the palette that prompted all this, so hold it to a tighter bound. */
-  it("keeps Nord's sweeps close to the originals", () => {
-    for (const background of BACKGROUNDS) {
-      if (isNeutral(background.stops)) continue;
-      const original = hueSpan(background.stops);
-      const ratio = hueSpan(themedBackground(background, nord)!.stops) / original;
-      expect(ratio, `${background.id} on nord`).toBeGreaterThan(0.75);
-      expect(ratio, `${background.id} on nord`).toBeLessThan(1.35);
+  /**
+   * The complaint that forced the arc system: Mint and Arctic both rendered
+   * green-to-cyan on Boron and Dracula, distinguishable only by lightness — two
+   * options in the picker that were one option shown twice. Distinct arcs make
+   * hue collision impossible by construction; this holds the perceptual margin
+   * that construction is supposed to buy, on every pair, on every theme.
+   */
+  it("never gives two backdrops the same hues on any theme", () => {
+    const chromatic = BACKGROUNDS.filter((background) => !isNeutral(background.stops));
+    const hue = (stop: string) => oklch(stop)!.h ?? 0;
+    for (const theme of THEMES) {
+      const themed = chromatic.map((background) => themedBackground(background, theme)!);
+      for (let i = 0; i < themed.length; i++) {
+        for (let j = i + 1; j < themed.length; j++) {
+          const apart = Math.max(
+            ...themed[i]!.stops.map((stop, index) => {
+              const delta = hue(themed[j]!.stops[index]!) - hue(stop);
+              return Math.abs(((((delta % 360) + 540) % 360) - 180));
+            }),
+          );
+          expect(apart, `${themed[i]!.id} and ${themed[j]!.id} on ${theme.id}`).toBeGreaterThan(30);
+        }
+      }
     }
   });
 
