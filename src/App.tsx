@@ -287,7 +287,7 @@ export function App({ shared }: AppProps = {}) {
       track("Copy image");
       flash("Image copied");
     } catch {
-      flash("Clipboard blocked — use Save instead");
+      flash("Clipboard access blocked — use Save instead");
     }
   }, [scene, flash]);
 
@@ -304,7 +304,7 @@ export function App({ shared }: AppProps = {}) {
         track("Copy text", { kind });
         flash(kind === "ansi" ? "ANSI copied" : kind === "text" ? "Text copied" : "chalk source copied");
       } catch {
-        flash("Clipboard blocked");
+        flash("Clipboard access blocked - please grant permission to access clipboard.");
       }
     },
     [renderLines, flash],
@@ -321,7 +321,7 @@ export function App({ shared }: AppProps = {}) {
       track("Copy link");
       flash("Link copied");
     } catch {
-      flash("Clipboard blocked");
+      flash("Clipboard access blocked - please grant permission to access clipboard.");
     }
   }, [value, themeId, backgroundId, frame, flash]);
 
