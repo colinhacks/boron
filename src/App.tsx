@@ -274,7 +274,7 @@ export function App({ shared }: AppProps = {}) {
       // Counted after the work succeeds rather than on the click, so a failed
       // render or a blocked clipboard never reads as someone exporting.
       track("Export", { format });
-      flash(`Saved ${filename}`);
+      flash(`Exported and Saved ${filename}`);
     } catch (error) {
       flash(error instanceof Error ? error.message : "Export failed");
     }
@@ -285,7 +285,7 @@ export function App({ shared }: AppProps = {}) {
     try {
       await copyImageToClipboard(scene);
       track("Copy image");
-      flash("Image copied");
+      flash("Copied Image to clipboard");
     } catch {
       flash("Clipboard access blocked — use Save instead");
     }
