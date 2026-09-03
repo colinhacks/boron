@@ -554,13 +554,23 @@ kbd {
   gap: 10px;
 }
 
-.panel__title {
-  margin: 0;
+/*
+ * One kind of label in the sidebar, whether it heads a panel or names a single
+ * control. The second, sentence-case tier promised a hierarchy that isn't
+ * there — a slider's label doesn't sit *under* anything, it just names the
+ * slider — and two tiers of label over a column of controls read as clutter.
+ */
+.panel__title,
+.field__label {
   color: var(--text-faint);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.panel__title {
+  margin: 0;
 }
 
 /* A section whose title carries its own on/off, so the switch reads as owning
@@ -776,19 +786,24 @@ kbd {
   gap: 5px;
 }
 
+/* Type comes from the shared label rule above; this is the row it sits in. */
 .field__label {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  color: var(--text-dim);
-  font-size: 12px;
 }
 
+/* The brighter half of the row, now that the label is a small-caps one: the
+   value is the part that moves while you drag, so it should be the part the
+   eye lands on. */
 .field__hint {
-  color: var(--text-faint);
+  color: var(--text-dim);
   font-variant-numeric: tabular-nums;
   font-size: 11px;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
 }
 
 /* A control the current settings have taken away, at the same strength a
@@ -851,6 +866,32 @@ kbd {
 
 .text-input:focus {
   border-color: var(--accent);
+}
+
+/*
+ * The one dropdown in the app, so it borrows the text box rather than inventing
+ * a shape. `appearance: none` is what lets the background, radius and border
+ * match — a platform select keeps its own on every OS — and the chevron is a
+ * background image because a pseudo-element cannot be drawn on a `select`.
+ */
+.select-input {
+  appearance: none;
+  padding-right: 26px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+    linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position: calc(100% - 14px) calc(50% + 1px), calc(100% - 9px) calc(50% + 1px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* The list itself is drawn by the OS, which does not inherit the panel's
+   colours — so the options are given one that is legible under both. */
+.select-input option {
+  background: var(--bg-elev-2);
+  color: var(--text);
 }
 
 .toggle-row {

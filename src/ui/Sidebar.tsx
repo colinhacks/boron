@@ -1,4 +1,10 @@
 import type { ReactNode } from "react";
+import {
+  HIGHLIGHT_LANGUAGES,
+  languageLabel,
+  type HighlightChoice,
+  type LanguageId,
+} from "../core/highlight.ts";
 import { THEMES, type Theme } from "../core/themes.ts";
 import {
   BACKGROUNDS,
@@ -124,6 +130,10 @@ export interface SidebarProps {
   onBackgroundChange: (id: string) => void;
   frame: FrameSettings;
   onFrameChange: (patch: Partial<FrameSettings>) => void;
+  highlight: HighlightChoice;
+  /** What the last paste was detected as, named on the auto option. */
+  detectedLanguage: LanguageId | null;
+  onHighlightChange: (choice: HighlightChoice) => void;
 }
 
 export function Sidebar({
@@ -133,6 +143,9 @@ export function Sidebar({
   onBackgroundChange,
   frame,
   onFrameChange,
+  highlight,
+  detectedLanguage,
+  onHighlightChange,
 }: SidebarProps) {
   const aspect = aspectById(frame.aspect);
   const fill = background && isFillId(background.id) ? background.id : null;
@@ -199,6 +212,39 @@ export function Sidebar({
         </div>
       </section>
 
+      {/*
+        Next to the theme, because the two answer the same question from
+        different ends: the theme decides what `green` looks like, and this
+        decides which words are green in the first place.
+      */}
+      <section className="panel">
+        <h2 className="panel__title">Syntax</h2>
+        <select
+          className="text-input select-input"
+          aria-label="Syntax highlighting"
+          value={highlight}
+          onChange={(event) => onHighlightChange(event.target.value as HighlightChoice)}
+        >
+          <option value="auto">
+            {detectedLanguage ? `Auto-detect (${languageLabel(detectedLanguage)})` : "Auto-detect"}
+          </option>
+          {/*
+            Named for what it *is* rather than for what it turns off. This is
+            what a paste carrying escape codes selects, and those colours have
+            an author — calling the option "None" would invite someone to read
+            it as "no colours" and clear a picture they were handed.
+          */}
+          <option value="ansi">Custom (ANSI)</option>
+          <optgroup label="Language">
+            {HIGHLIGHT_LANGUAGES.map((language) => (
+              <option key={language.id} value={language.id}>
+                {language.label}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+      </section>
+
       <section className="panel">
         <h2 className="panel__title">Backdrop</h2>
         <div className="background-grid">
@@ -255,8 +301,13 @@ export function Sidebar({
         </div>
       </section>
 
+      {/*
+        No heading. Each control below names itself in the same small caps a
+        panel title uses, so "Window" would only have been a second label over
+        five labels — and the sliders are legible in a way that a group needs a
+        name to be: nobody reads "Padding" and wonders what it is padding.
+      */}
       <section className="panel">
-        <h2 className="panel__title">Window</h2>
         {/*
           First, because it is the one control here that decides what the others
           can still do: everything below sizes a block, and this decides whether

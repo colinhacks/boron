@@ -134,20 +134,53 @@ export function shareParamsFrom(url: string): URLSearchParams | null {
   return parsed.searchParams.has(PARAM.content) ? parsed.searchParams : null;
 }
 
+/** The page itself, with everything this app puts in an address taken back off. */
+function bareAddress(base: string): string {
+  const url = new URL(base);
+  url.hash = "";
+  url.search = "";
+  return url.href;
+}
+
+async function encodedParams(workspace: Workspace): Promise<string> {
+  const wire = toWire(workspace);
+  return toSearchParams(wire, await encodeContent(wire.content)).toString();
+}
+
 /**
  * The parameters go in the query string rather than the fragment, because a
  * fragment never reaches the server and an image endpoint can only be handed
  * something the server is told about.
  */
 export async function buildShareUrl(workspace: Workspace, base: string): Promise<string> {
-  const url = new URL(base);
-  url.hash = "";
-  url.search = "";
-  const wire = toWire(workspace);
-  const params = toSearchParams(wire, await encodeContent(wire.content)).toString();
+  const href = bareAddress(base);
+  const params = await encodedParams(workspace);
 
-  const query = `${url.href}?${params}`;
-  return query.length <= MAX_QUERY_URL_LENGTH ? query : `${url.href}#${params}`;
+  const query = `${href}?${params}`;
+  return query.length <= MAX_QUERY_URL_LENGTH ? query : `${href}#${params}`;
+}
+
+/**
+ * The address to leave in the bar for a workspace being edited.
+ *
+ * The same link as `buildShareUrl` while one fits in a query string, and the
+ * bare page once it does not. Two differences from a copied link, both because
+ * this one is rewritten on every pause in typing rather than made once on a
+ * button press:
+ *
+ * There is no fragment fallback. A copied link may be two hundred kilobytes
+ * long; an address bar that is re-encoded and rewritten every half second may
+ * not, and a document that big has `localStorage` holding it anyway.
+ *
+ * And giving up means *clearing* the parameters rather than leaving the last
+ * ones that fit. A URL describing the document you had before the paste is worse
+ * than no URL: it wins over `localStorage` on the next load, so a stale one
+ * would quietly throw the paste away.
+ */
+export async function trackingUrl(workspace: Workspace, base: string): Promise<string> {
+  const href = bareAddress(base);
+  const query = `${href}?${await encodedParams(workspace)}`;
+  return query.length <= MAX_QUERY_URL_LENGTH ? query : href;
 }
 
 export async function readSharedWorkspace(url: string): Promise<Workspace | null> {
@@ -161,24 +194,18 @@ export async function readSharedWorkspace(url: string): Promise<Workspace | null
 }
 
 /**
- * The shared workspace this page was opened with, taken off the URL.
+ * Whether a URL carries a link in its *fragment* specifically.
  *
- * Taken, not read: the address is rewritten once the state is in hand, so that
- * editing what someone sent you and then reloading keeps your edits rather than
- * snapping back to their link.
+ * The query string is this app's own handwriting — the address bar tracks the
+ * workspace as it is edited — so a page that reopened every link it saw would
+ * keep reopening itself, and each reopen costs the undo stack. A fragment is the
+ * only half that is still somebody else's: nothing writes one but a copied link
+ * too long to have been a query.
  */
-export async function consumeSharedWorkspace(): Promise<Workspace | null> {
-  const workspace = await readSharedWorkspace(window.location.href);
-  if (shareParamsFrom(window.location.href) === null) return null;
-
+export function hasFragmentLink(url: string): boolean {
   try {
-    const url = new URL(window.location.href);
-    url.hash = "";
-    for (const name of Object.values(PARAM)) url.searchParams.delete(name);
-    window.history.replaceState(null, "", url.href);
+    return new URLSearchParams(new URL(url).hash.replace(/^#/, "")).has(PARAM.content);
   } catch {
-    // Some origins refuse `replaceState`. Losing the tidy-up is not worth losing
-    // the workspace that came with it.
+    return false;
   }
-  return workspace;
 }

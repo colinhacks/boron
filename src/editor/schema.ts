@@ -1,5 +1,5 @@
 import { Schema, type Mark, type MarkSpec, type Node as PMNode } from "prosemirror-model";
-import type { LineElement, StyledText, TerminalDocument } from "../core/document.ts";
+import { lineOf, type LineElement, type StyledText, type TerminalDocument } from "../core/document.ts";
 import { isColor, MODIFIER_KEYS, type Marks } from "../core/types.ts";
 
 /**
@@ -138,7 +138,10 @@ export function nodeToDocument(node: PMNode): TerminalDocument {
     line.forEach((child) => {
       if (child.isText && child.text) children.push({ text: child.text, ...marksOf(child.marks) });
     });
-    document.push({ type: "line", children: children.length > 0 ? children : [{ text: "" }] });
+    // Through `lineOf`, because a text node is the one place the schema cannot
+    // constrain: `validate` guards a mark's attributes, not a string's bytes, so
+    // a crafted `data-pm-slice` on the clipboard is parsed straight into one.
+    document.push(lineOf(children));
   });
   return document.length > 0 ? document : [{ type: "line", children: [{ text: "" }] }];
 }

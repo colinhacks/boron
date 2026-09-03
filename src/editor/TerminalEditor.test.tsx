@@ -44,6 +44,7 @@ function mount(): { handle: TerminalHandle; document: () => TerminalDocument } {
         lines={emptyDocument()}
         theme={DEFAULT_THEME}
         ansi16={() => DEFAULT_THEME.ansi}
+        highlight="auto"
         fontSize={14}
         lineHeight={21}
         halfLeading={3}

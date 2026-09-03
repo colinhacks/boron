@@ -31,14 +31,15 @@ export const TRANSPARENT_ID = "none";
  * Mint against Arctic, which neither anchor touches.
  *
  * Lightness *alternates* around the wheel rather than following each hue's
- * natural luminance, which is the tempting rule and the wrong one. Because
- * `themedBackground` snaps every stop onto the nearest theme accent, two
- * backdrops with neighbouring anchors can land on the same pair — and if they
- * also share a lightness they render as the same swatch. Following natural
- * luminance bunched Mint, Arctic and Sand together at the light end and did
- * exactly that: on Dracula, Mint and Arctic came out an OKLab distance of 0.044
- * apart, two identical-looking options in the picker. Alternating pulls the
- * closest pair anywhere out to 0.140, which `background.test.ts` holds the line on.
+ * natural luminance, which is the tempting rule and the wrong one. Following
+ * natural luminance bunched Mint, Arctic and Sand together at the light end,
+ * and on Dracula two of them once rendered an OKLab distance of 0.044 apart —
+ * two identical-looking options in the picker. `themedBackground` now gives
+ * every backdrop its own arc of the theme's hue wheel, so that exact collapse
+ * cannot recur — but neighbouring arcs still meet at a shared accent, and the
+ * alternation is what keeps wheel-neighbours reading as different swatches
+ * rather than one ramp cut in two. `background.test.ts` holds the perceptual
+ * line on every pair.
  */
 const SWEEP = 55;
 

@@ -47,7 +47,54 @@ The wire names are deliberately not the internal ones: `padding` not `framePaddi
 
 Two lossiness bugs that ANSI-as-a-format would otherwise have had, both fixed and both pinned by a test: `parseAnsi` gained a `trimTrailing` option, because trailing spaces take up cells and dropping them moves where a long line wraps; and the content is serialized from raw marks rather than through the `$`-prompt heuristic, which would otherwise freeze one reading of the document.
 
-The base64/URL layer on top is built too, in [src/share.ts](../src/share.ts): `buildShareUrl` behind "Copy link" in the export button, and `consumeSharedWorkspace` on load. So links ship, and this page is the account of why the *first* attempt did not.
+The base64/URL layer on top is built too, in [src/share.ts](../src/share.ts): `readSharedWorkspace` on load, and two writers. So links ship, and this page is the account of why the *first* attempt did not.
+
+## The address bar tracks the workspace
+
+There are two ways a link gets written, and the difference between them is the only interesting part.
+
+`buildShareUrl` is "Copy link" in the export button — made once, on a button press, and allowed to be enormous. Past `MAX_QUERY_URL_LENGTH` it moves the parameters to the **fragment**, which never reaches a server and so has no practical length limit. A six-hundred-line document copies as an eleven-kilobyte link that reopens all six hundred lines.
+
+`trackingUrl` is what the address bar shows while you edit. It runs on every pause in typing — debounced by `URL_SYNC_DELAY` in [App.tsx](../src/App.tsx), because Safari throws once `replaceState` is called about a hundred times in thirty seconds — so it is a different job with two deliberate differences:
+
+- **No fragment fallback.** An address bar that is re-encoded and rewritten every half second cannot be two hundred kilobytes long, and a document that big has `localStorage` holding it anyway.
+- **Giving up means clearing the parameters, not leaving the last ones that fit.** This is the part that would be a bug if it were done the obvious way: a URL wins over `localStorage` on the next load, so an address left describing the document you had *before* the paste would silently throw the paste away on reload.
+
+Two consequences worth knowing:
+
+**The address is no longer wiped on arrival.** It used to be — `consumeSharedWorkspace` read the link and then cleared it, so that editing what someone sent you and reloading kept your edits rather than snapping back to their picture. Live tracking gets the same thing without the URL going blank, so the read is now a plain `readSharedWorkspace`. Tracking starts on the reader's **first edit**, never on load: rewriting a link on arrival would re-encode a fragment link as a query one, or clear it outright when it was too long to be one, and neither is anything the reader did.
+
+**Only a *fragment* link reopens.** The query string is the app's own handwriting now, so the `hashchange` handler that exists for links pasted into a tab already on Boron has to tell the two apart — `hasFragmentLink` is that test. Without it the app reopens its own address, replacing the document with a copy of itself and costing the undo stack every time.
+
+`highlight` is the one workspace field no link carries. It decides no pixels, and a link states its content as ANSI — so whatever the sender had selected, what arrives is text that names its own colours, and `fromWire` says so by returning `ansi`.
+
+## What v1 actually promises
+
+The vocabulary is the obvious half of a frozen format. The half that is easy to miss is **what a link means when it does not say** — and that is where the design was quietly wrong before release.
+
+**Unsaid fields resolve through [`V1_DEFAULTS`](../src/wire.ts), never through the app's own defaults.** `DEFAULT_FRAME` is a product decision and is free to move — a wider block, a softer shadow, a card-shaped canvas out of the box. `V1_DEFAULTS` duplicates today's numbers and never moves again. Two constants that happen to agree is the correct amount of duplication, because they answer different questions.
+
+`aspect` is where that was already live rather than hypothetical. Every link the app writes says `aspect=`, which reads back as *unsaid* — so the day `DEFAULT_FRAME.aspect` became a preset, every link ever sent would have turned into that card. That is exactly the failure this whole file exists to prevent, and it was arriving through the one door left open.
+
+**Anything a reader does not recognize is unsaid, not true.** `titleBar` used to treat everything except `0` and `false` as on, so `titleBar=no` drew a title bar. It now takes `1/true/yes/on` and `0/false/no/off`, and anything else means the link did not say — the safer half to freeze, because only that one can be given a meaning later without changing what an existing link renders.
+
+**A missing `v` means 1, permanently.** That is what makes a link writable by hand, and it commits every future reader to the same reading.
+
+**These are part of the promise too, and tightening any of them breaks old links:** the clamps in `sanitizeFrame` (padding 0–400, radius 0–200, columns 1–400, shadow 0–100, title 200 characters), `MAX_LINES`, and `MAX_DECOMPRESSED_BYTES`. Widening is always safe; narrowing is a v2.
+
+**What is frozen is the id, not the paint.** `theme=nord` promises the name, and the palette behind it is a design the app owns — the same distinction that let backdrop ids change meaning within hours the first time round.
+
+The corpus in [wire.test.ts](../src/wire.test.ts) is what makes all of the above enforced rather than remembered, and it had the identical bug it exists to catch: its first entry asserted `frame: DEFAULT_FRAME`, so the one case that matters most — a link naming only its content — moved in lockstep with the app and passed wherever the defaults went. **Every expected value in that file is now a literal.** A corpus that follows the code it pins is not a corpus.
+
+## A document may not hold what a cell cannot
+
+Content travels as ANSI, so anything in a document that ANSI cannot state is a hole in the format. A tab is one: a cell grid has nowhere to put one, and `parseAnsi` has always expanded it to the next eight-column stop.
+
+The paste parsers did not. [rtf-paste.ts](../src/core/rtf-paste.ts) and [html-paste.ts](../src/core/html-paste.ts) hand their text back directly rather than through `parseAnsi`, so a copy out of Terminal.app or iTerm2 — the two macOS terminals that write only RTF — could put a **raw tab** in the document. The preview drew it as a browser tab advance; a share link brought it back as spaces. Reproduced against the captured pasteboard bytes in `clipboard-fixtures.ts`: twenty-nine cells became thirty-two, and the reader's picture was wider than the sender's. That is the founding constraint of this feature, broken by one character.
+
+The fix is at the funnel rather than at each parser. `toPrintableCells` in [ansi.ts](../src/core/ansi.ts) is `parseAnsi`'s own reading of those bytes, lifted out; `lineOf` in [document.ts](../src/core/document.ts) applies it, and every document in the app is assembled there — `sanitizeDocument`, `parsedLinesToDocument`, and `nodeToDocument` at the editor boundary. So no door is left: not a rich-text paste, not a crafted `data-pm-slice` on the clipboard, not a `localStorage` entry written by an older build.
+
+It is the same shape as the `Color` union and the schema's `validate` hook, and it belongs with them in the list of things that make the central invariant structural instead of hoped for.
 
 ## Options that were considered
 

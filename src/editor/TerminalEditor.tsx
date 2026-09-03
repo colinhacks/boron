@@ -6,6 +6,7 @@ import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type MouseEvent, type Ref } from "react";
 import type { LineElement, TerminalDocument } from "../core/document.ts";
+import type { HighlightChoice, LanguageId } from "../core/highlight.ts";
 import type { Theme } from "../core/themes.ts";
 import { FONT_FAMILY } from "../export/fonts.ts";
 import { boxFragment, boxText, cellAt, deleteBox } from "./box.ts";
@@ -39,6 +40,10 @@ export interface TerminalSurfaceProps {
   onChange: (document: TerminalDocument) => void;
   /** Fires on every transaction, so the toolbars can re-read the active marks. */
   onSelectionChange?: () => void;
+  /** What the syntax control reads, which decides how an unstyled paste is colored. */
+  highlight: HighlightChoice;
+  /** Fires when a paste answers the syntax question for itself. */
+  onHighlightChange?: (choice: HighlightChoice, detected: LanguageId | null) => void;
   handle?: Ref<TerminalHandle>;
 }
 
@@ -58,6 +63,8 @@ export function TerminalSurface({
   columns,
   onChange,
   onSelectionChange,
+  highlight,
+  onHighlightChange,
   handle,
 }: TerminalSurfaceProps) {
   const host = useRef<HTMLDivElement | null>(null);
@@ -69,8 +76,8 @@ export function TerminalSurface({
   // The view is built once and never torn down — recreating it would cost the
   // selection, the undo stack and focus on every render — so everything dynamic
   // is read through this rather than captured in a closure.
-  const latest = useRef({ theme, halfLeading, onChange, onSelectionChange, ansi16, lines, columns, box, ranges, measureGrid, setBox, clear, formatting });
-  latest.current = { theme, halfLeading, onChange, onSelectionChange, ansi16, lines, columns, box, ranges, measureGrid, setBox, clear, formatting };
+  const latest = useRef({ theme, halfLeading, onChange, onSelectionChange, ansi16, highlight, onHighlightChange, lines, columns, box, ranges, measureGrid, setBox, clear, formatting });
+  latest.current = { theme, halfLeading, onChange, onSelectionChange, ansi16, highlight, onHighlightChange, lines, columns, box, ranges, measureGrid, setBox, clear, formatting };
 
   /**
    * Put the caret where the box started and drop the box.
@@ -119,7 +126,11 @@ export function TerminalSurface({
         // Ahead of everything else: a paste has to be read as terminal output
         // before ProseMirror parses the markup itself, which would take a
         // terminal's per-run elements for one line each.
-        pastePlugin(() => latest.current.ansi16()),
+        pastePlugin({
+          ansi16: () => latest.current.ansi16(),
+          highlight: () => latest.current.highlight,
+          onHighlight: (choice, detected) => latest.current.onHighlightChange?.(choice, detected),
+        }),
         history(),
         keymap({
           "Mod-z": undo,

@@ -2,6 +2,12 @@ import { Fragment, Slice } from "prosemirror-model";
 import { Plugin } from "prosemirror-state";
 import { hasAnsi, parseAnsi, type ParsedLine } from "../core/ansi.ts";
 import { MAX_LINES, parsedLinesToDocument } from "../core/document.ts";
+import {
+  autoHighlight,
+  highlightToAnsi,
+  type HighlightChoice,
+  type LanguageId,
+} from "../core/highlight.ts";
 import { parseHtmlClipboard } from "../core/html-paste.ts";
 import { parseRtfClipboard } from "../core/rtf-paste.ts";
 import { documentToNode } from "./schema.ts";
@@ -21,6 +27,17 @@ function isOwnClipboardHtml(html: string): boolean {
 }
 
 /**
+ * The winning flavour's lines, and whether that flavour brought its own colors.
+ *
+ * The distinction is what the syntax highlighter keys on: text that named its
+ * own colors has an author, and a highlighter second-guessing them would throw
+ * away the thing Boron exists to keep.
+ */
+type FlavourRead =
+  | { lines: ParsedLine[]; styled: true }
+  | { lines: ParsedLine[]; styled: false; text: string };
+
+/**
  * Paste like a terminal.
  *
  * Priority is deliberate: `text/plain` carrying SGR codes beats rich text,
@@ -30,30 +47,86 @@ function isOwnClipboardHtml(html: string): boolean {
  * all will offer, and on macOS the two say the same thing — the HTML is made out
  * of the RTF. RTF is what is left when nothing made that conversion for us.
  */
-export function parseClipboard(data: DataTransfer, ansi16: readonly string[]): ParsedLine[] | null {
+function readFlavours(data: DataTransfer, ansi16: readonly string[]): FlavourRead | null {
   const html = data.getData("text/html");
   const text = data.getData("text/plain");
 
-  if (text && hasAnsi(text)) return parseAnsi(text);
+  if (text && hasAnsi(text)) return { lines: parseAnsi(text), styled: true };
 
   if (html) {
     // The plain flavour rides along because the same copy states its rows twice
     // and only one of the two survives a clipboard intact — see
     // `relineFromPlainText`. It decides nothing about styling.
     const parsed = parseHtmlClipboard(html, ansi16, text);
-    if (parsed) return parsed;
+    if (parsed) return { lines: parsed, styled: true };
   }
 
   const rtf = data.getData("text/rtf");
   if (rtf) {
     const parsed = parseRtfClipboard(rtf, ansi16);
-    if (parsed) return parsed;
+    if (parsed) return { lines: parsed, styled: true };
   }
 
   // Still through the parser: it normalizes CRLF, tabs and stray control
   // characters that would otherwise land in the document.
-  if (text) return parseAnsi(text);
+  if (text) return { lines: parseAnsi(text), styled: false, text };
   return null;
+}
+
+export function parseClipboard(data: DataTransfer, ansi16: readonly string[]): ParsedLine[] | null {
+  return readFlavours(data, ansi16)?.lines ?? null;
+}
+
+/** The lines to insert, and what the syntax control should read afterwards. */
+export interface ClipboardRead {
+  lines: ParsedLine[];
+  highlight: HighlightChoice;
+  /**
+   * The language auto-detection found, or `null` when it did not decide.
+   *
+   * Detection deliberately leaves `highlight` on `auto` rather than pinning the
+   * language it found: pinning it would disarm detection for every later paste,
+   * so a TypeScript block followed by a Python one would silently colour the
+   * Python as TypeScript. Only a reader choosing a language out of the menu
+   * pins it.
+   *
+   * It is also what the toast says. Naming a language the reader picked
+   * themselves is noise, and so is naming `ansi` for a paste whose colours
+   * arrived with it — the one thing worth a word is the app deciding on its own.
+   */
+  detected: LanguageId | null;
+}
+
+/**
+ * A paste, with the syntax question answered.
+ *
+ * Three outcomes, and which one applies is decided by the text rather than by
+ * the reader: a paste carrying escape codes keeps them and selects `ansi`; an
+ * unstyled paste under an explicit language is highlighted as that language; an
+ * unstyled paste under `auto` is highlighted only if `autoHighlight` recognizes
+ * it, and otherwise lands exactly as it arrived with the control untouched.
+ */
+export function readClipboard(
+  data: DataTransfer,
+  ansi16: readonly string[],
+  choice: HighlightChoice,
+): ClipboardRead | null {
+  const read = readFlavours(data, ansi16);
+  if (!read) return null;
+  if (read.styled) return { lines: read.lines, highlight: "ansi", detected: null };
+  if (choice === "ansi") return { lines: read.lines, highlight: choice, detected: null };
+
+  if (choice !== "auto") {
+    return {
+      lines: parseAnsi(highlightToAnsi(read.text, choice)),
+      highlight: choice,
+      detected: null,
+    };
+  }
+
+  const found = autoHighlight(read.text);
+  if (!found) return { lines: read.lines, highlight: "auto", detected: null };
+  return { lines: parseAnsi(found.ansi), highlight: "auto", detected: found.language };
 }
 
 /**
@@ -71,7 +144,15 @@ function sliceFor(lines: readonly ParsedLine[]): Slice {
   return new Slice(Fragment.from(node.content), 1, 1);
 }
 
-export function pastePlugin(ansi16: () => readonly string[]): Plugin {
+export interface PasteOptions {
+  ansi16: () => readonly string[];
+  /** What the syntax control reads right now — read at paste time, not captured. */
+  highlight: () => HighlightChoice;
+  /** Fires when a paste decides the syntax question, so the control can follow. */
+  onHighlight: (choice: HighlightChoice, detected: LanguageId | null) => void;
+}
+
+export function pastePlugin({ ansi16, highlight, onHighlight }: PasteOptions): Plugin {
   return new Plugin({
     props: {
       handlePaste(view, event) {
@@ -79,11 +160,12 @@ export function pastePlugin(ansi16: () => readonly string[]): Plugin {
         if (!data) return false;
         if (isOwnClipboardHtml(data.getData("text/html"))) return false;
 
-        const lines = parseClipboard(data, ansi16());
-        if (!lines) return false;
+        const read = readClipboard(data, ansi16(), highlight());
+        if (!read) return false;
 
         event.preventDefault();
-        view.dispatch(view.state.tr.replaceSelection(sliceFor(lines)).scrollIntoView());
+        view.dispatch(view.state.tr.replaceSelection(sliceFor(read.lines)).scrollIntoView());
+        onHighlight(read.highlight, read.detected);
         return true;
       },
 
@@ -105,15 +187,16 @@ export function pastePlugin(ansi16: () => readonly string[]): Plugin {
         if (!data) return false;
         if (isOwnClipboardHtml(data.getData("text/html"))) return false;
 
-        const lines = parseClipboard(data, ansi16());
-        if (!lines) return false;
+        const read = readClipboard(data, ansi16(), highlight());
+        if (!read) return false;
 
         const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
         if (!at) return false;
 
         event.preventDefault();
-        view.dispatch(view.state.tr.replace(at.pos, at.pos, sliceFor(lines)).scrollIntoView());
+        view.dispatch(view.state.tr.replace(at.pos, at.pos, sliceFor(read.lines)).scrollIntoView());
         view.focus();
+        onHighlight(read.highlight, read.detected);
         return true;
       },
     },

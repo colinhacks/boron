@@ -78,11 +78,12 @@ describe("the backdrop set", () => {
   });
 
   /**
-   * The one that actually bites. Every stop gets snapped onto the nearest theme
-   * accent, so two backdrops with neighbouring anchors can land on the same pair
-   * — and if they also share a lightness they render as the same swatch. An
-   * earlier arrangement put Mint and Arctic 0.044 apart on Dracula, which is two
-   * indistinguishable options in the picker.
+   * The one that actually bites. An earlier adapter chose each gradient's hues
+   * independently, and on a palette with few hues in a region two backdrops
+   * chose the same pair — Mint and Arctic once landed 0.044 apart on Dracula,
+   * two indistinguishable options in the picker. The arc system makes a hue
+   * collision impossible by construction; this holds the perceptual floor under
+   * every pair, the two neutrals included, at their measured 0.140 less margin.
    */
   it("renders every backdrop distinctly on every theme", () => {
     for (const theme of THEMES) {
@@ -95,7 +96,7 @@ describe("the backdrop set", () => {
           expect(
             gap(rendered[i]!.stops, rendered[j]!.stops),
             `${rendered[i]!.id} and ${rendered[j]!.id} on ${theme.id}`,
-          ).toBeGreaterThan(0.1);
+          ).toBeGreaterThan(0.13);
         }
       }
     }

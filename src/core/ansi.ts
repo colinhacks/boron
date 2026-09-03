@@ -204,6 +204,48 @@ export interface ParsedLine {
 
 const TAB_WIDTH = 8;
 
+/**
+ * A run of text as printable cells: tabs advanced to the next stop, and every
+ * other C0 control dropped.
+ *
+ * This is `parseAnsi`'s own reading of those bytes, lifted out so a document
+ * built from something that is *not* escape codes agrees with one that is. It
+ * has to agree, because a share link states every document as ANSI — a raw tab
+ * that reached the document from a rich-text paste comes back from a link as
+ * spaces, and the reader's picture is then wider than the sender's. A cell grid
+ * has no way to hold a tab, so the document must not either.
+ *
+ * `column` is where the run begins, and comes back advanced. A tab stop is
+ * measured from the start of the *line*, not of the run, so a line made of
+ * several styled runs has to thread the count through all of them.
+ */
+export function toPrintableCells(text: string, column: number): { text: string; column: number } {
+  let out = "";
+  let col = column;
+  for (let i = 0; i < text.length; ) {
+    const ch = text[i]!;
+    if (ch === "\t") {
+      const stop = Math.floor(col / TAB_WIDTH) * TAB_WIDTH + TAB_WIDTH;
+      while (col < stop) {
+        out += " ";
+        col += 1;
+      }
+      i += 1;
+      continue;
+    }
+    if (ch < " ") {
+      i += 1;
+      continue;
+    }
+    // A surrogate pair is one cell, the way `write` counts it below.
+    const size = text.codePointAt(i)! > 0xffff ? 2 : 1;
+    out += text.slice(i, i + size);
+    col += 1;
+    i += size;
+  }
+  return { text: out, column: col };
+}
+
 /** A trailing run of plain spaces carries no information; a colored one does. */
 function isTrimmableCell(cell: Cell): boolean {
   return cell.ch === " " && cell.state.bg === null && !cell.state.underline && !cell.state.inverse;
