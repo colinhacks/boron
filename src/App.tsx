@@ -362,7 +362,7 @@ export function App({ shared }: AppProps = {}) {
       // Counted after the work succeeds rather than on the click, so a failed
       // render or a blocked clipboard never reads as someone exporting.
       track("Export", { format });
-      flash(`Saved ${filename}`);
+      flash(`Exported and Saved ${filename}`);
     } catch (error) {
       flash(error instanceof Error ? error.message : "Export failed");
     }
@@ -373,9 +373,9 @@ export function App({ shared }: AppProps = {}) {
     try {
       await copyImageToClipboard(scene);
       track("Copy image");
-      flash("Image copied");
+      flash("Copied Image to clipboard");
     } catch {
-      flash("Clipboard blocked — use Save instead");
+      flash("Clipboard access blocked — use Save instead");
     }
   }, [scene, flash]);
 
@@ -392,7 +392,7 @@ export function App({ shared }: AppProps = {}) {
         track("Copy text", { kind });
         flash(kind === "ansi" ? "ANSI copied" : kind === "text" ? "Text copied" : "chalk source copied");
       } catch {
-        flash("Clipboard blocked");
+        flash("Clipboard access blocked - please grant permission to access clipboard.");
       }
     },
     [renderLines, flash],
@@ -414,7 +414,7 @@ export function App({ shared }: AppProps = {}) {
       track("Copy link");
       flash("Link copied");
     } catch {
-      flash("Clipboard blocked");
+      flash("Clipboard access blocked - please grant permission to access clipboard.");
     }
   }, [workspace, flash]);
 
