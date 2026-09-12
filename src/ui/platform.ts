@@ -27,11 +27,22 @@ export const ALT_LABEL = altLabelFor(
 /**
  * How often this browser will let the address bar be rewritten, in ms.
  *
- * Every engine rate-limits `history.replaceState`, and WebKit's is the one that
- * bites: past its ceiling it *throws* a `SecurityError` rather than ignoring the
- * call, so a URL written on every keystroke takes the tab out on a long
- * paragraph. The documented limit is 100 calls per 30 seconds — one per 300ms
- * sustained — which Safari 17 relaxed considerably.
+ * This is not about rendering cost, and it is worth saying so because the cheap
+ * assumption is that it must be. Writing the address is free: `replaceState`
+ * re-renders nothing, and the DEFLATE pass behind it measures a quarter of a
+ * millisecond for any document short enough to fit in a URL at all. Removing the
+ * throttle entirely holds a steady sixty frames a second.
+ *
+ * It is about a hard limit that *throws*. Every engine rate-limits
+ * `history.replaceState`; WebKit's is the one that bites, raising a
+ * `SecurityError` rather than ignoring the call. The documented ceiling is 100
+ * calls per 30 seconds, which Safari 17 relaxed considerably.
+ *
+ * One drag of the width slider spends **180** of those 100 calls — measured,
+ * unthrottled, over three seconds at 60Hz. So this is not a margin being
+ * defended against a hypothetical: a single ordinary gesture is already
+ * comfortably over the budget, and on Safari the second half of that drag would
+ * throw and the address would quietly stop tracking.
  *
  * The three numbers are [nuqs](https://nuqs.dev)'s, and they are here because
  * that library exists to do exactly this and has had far more browsers pointed
