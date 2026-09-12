@@ -14,7 +14,7 @@ import {
   type HighlightChoice,
   type LanguageId,
 } from "./core/highlight.ts";
-import { ALT_LABEL } from "./ui/platform.ts";
+import { ALT_LABEL, URL_WRITE_INTERVAL } from "./ui/platform.ts";
 import {
   DEFAULT_BACKGROUND_ID,
   backgroundById,
@@ -107,19 +107,6 @@ function loadPersisted(): Partial<Workspace> {
  */
 const MIN_LEGIBLE_TYPE = 6;
 
-/**
- * How long editing has to pause before the address bar catches up.
- *
- * Not a nicety: Safari throws once `replaceState` is called about a hundred
- * times in thirty seconds, so a URL written on every keystroke would take the
- * tab out on a long paragraph. Half a second is comfortably under that even for
- * someone typing in bursts, and it is short enough that the URL is already right
- * by the time a hand reaches the address bar to copy it.
- *
- * The work behind each one is a DEFLATE pass over the whole document, which is
- * the other reason not to do it per keystroke.
- */
-const URL_SYNC_DELAY = 500;
 
 /**
  * The how-to legend under the block — the gestures you would not guess.
@@ -277,31 +264,67 @@ export function App({ shared }: AppProps = {}) {
    * outright when it was too long to be one, and neither is the reader's doing.
    * The comparison is on identity, which is what makes it survive `StrictMode`
    * mounting the app twice.
+   *
+   * # Why this throttles rather than waits
+   *
+   * A debounce would be the obvious timer here and it is the wrong one: it waits
+   * for you to *stop*, so picking a theme sat still for the whole delay before
+   * doing anything, and holding a key meant the address never moved at all. The
+   * first change in a burst is the one worth showing immediately, and it is the
+   * one a debounce is guaranteed to delay.
+   *
+   * So the write is immediate unless one already went out inside
+   * `URL_WRITE_INTERVAL`, and then it is scheduled for the moment the interval is
+   * up. A single click lands at once; a held key settles into a steady cadence at
+   * the fastest rate the browser will take. The interval is the browser's limit
+   * and nothing else — the encode behind it costs about a quarter of a
+   * millisecond for any document short enough to fit in a URL at all, measured,
+   * so it is not worth pacing around.
    */
   const opened = useRef(workspace).current;
+  const lastWrittenAt = useRef(0);
   useEffect(() => {
     if (workspace === opened) return;
 
     let cancelled = false;
-    const timer = window.setTimeout(() => {
+    const write = () => {
+      // Stamped twice, for two different reasons. Here, so a burst cannot pile up
+      // overlapping encodes while each waits its turn…
+      lastWrittenAt.current = Date.now();
       void trackingUrl(workspace, window.location.href).then(
         (url) => {
           // The guard is ordering, not tidiness: encoding is asynchronous, so
           // without it a slow pass over a long document could land after a fast
           // one and leave the bar describing an older draft.
           if (cancelled) return;
+          // …and again here, because this is the call being rate-limited. Anchor
+          // the interval to the stamp above and every gap comes out a little
+          // short — a timer firing early, `Date.now()` reading coarsely — which
+          // measured 42ms against a 50ms target. That slack does not matter at
+          // 50ms and would matter at 320ms, where the budget is 100 calls per 30
+          // seconds and a 17% undershoot spends 113 of them.
+          lastWrittenAt.current = Date.now();
           try {
             window.history.replaceState(null, "", url);
           } catch {
-            // Safari throws once these come too fast, and some origins refuse
-            // them outright. An address bar that has fallen behind is not worth
-            // taking the editor down for.
+            // WebKit throws rather than ignoring the call once these come too
+            // fast, and some origins refuse them outright. An address bar that
+            // has fallen behind is not worth taking the editor down for.
           }
         },
         () => {},
       );
-    }, URL_SYNC_DELAY);
+    };
 
+    const wait = URL_WRITE_INTERVAL - (Date.now() - lastWrittenAt.current);
+    if (wait <= 0) {
+      write();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const timer = window.setTimeout(write, wait);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
