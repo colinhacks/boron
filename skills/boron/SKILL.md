@@ -16,15 +16,15 @@ To save the image, you need a browser tool that can open a URL and run JavaScrip
 
 ## Step 1: Get the content
 
-The content is raw terminal output, escape codes included. Keep the colors:
+The content is raw terminal output, escape codes included. Write it to a temporary directory (for example `TMP=$(mktemp -d)`), not to the user's working directory. Keep the colors:
 
 - **A command the agent can run:** force color, because most tools turn it off when stdout is not a terminal.
   ```bash
-  FORCE_COLOR=1 CLICOLOR_FORCE=1 pnpm test > out.ansi 2>&1
-  git -c color.ui=always log --oneline -10 > out.ansi
-  ls --color=always > out.ansi
+  FORCE_COLOR=1 CLICOLOR_FORCE=1 pnpm test > "$TMP/out.ansi" 2>&1
+  git -c color.ui=always log --graph --oneline --decorate -10 > "$TMP/out.ansi"
+  ls --color=always > "$TMP/out.ansi"
   ```
-  If a tool still prints no color, run it under a pseudo-terminal: `script -q out.ansi <cmd>` on macOS, `script -qc "<cmd>" out.ansi` on Linux.
+  If a tool still prints no color, run it under a pseudo-terminal: `script -q "$TMP/out.ansi" <cmd>` on macOS, `script -qc "<cmd>" "$TMP/out.ansi"` on Linux.
 - **Code or plain text:** use it as is, and give the `language` option in step 4. The app colors it with its own highlighter.
 - **Output the user pasted, or output to mock up:** write the escape codes yourself, for example `printf '\e[32m✓\e[0m passed\n'`. Colors are chalk's sixteen names (SGR 30–37, 90–97 and the backgrounds), 256-color and truecolor. Modifiers are bold, dim, italic, underline, inverse, strikethrough and hidden.
 
@@ -40,7 +40,7 @@ A line that starts with `$`, `❯`, a bare `>` or `➜` is drawn as a command (b
 | `--backdrop` | `midnight`, `ember`, `mint`, `dusk`, `sand`, `arctic`, `graphite`, `ink`, `none` (transparent, but filled with the theme background in JPEG), or `#rrggbb` (flat fill) | `midnight` |
 | `--title-bar` | `on`, `off` | `on` |
 | `--title` | text in the title bar, 200 characters at most | empty |
-| `--columns` | terminal width, 1–400. Longer lines wrap | `80` |
+| `--columns` | terminal width, 1–400, or `auto`. Longer lines wrap | `auto`: the longest visible line, at least 80 and at most 400 |
 | `--aspect` | `og` (1200×630), `square` (1080×1080), `wide` (1920×1080), or leave out to fit the content | fit content |
 | `--padding` | px around the window, 0–400. Ignored with `--aspect` | `48` |
 | `--radius` | corner radius in px, 0–200 | `12` |
@@ -55,14 +55,14 @@ Options for `capture.js` (they are not part of the link):
 
 Give `language` only for plain code. Do not give it for output that already has ANSI colors, because it replaces them.
 
-Set `--columns` to the width of the longest line if lines wrap where they should not. An unknown theme or backdrop falls back to the default, and values out of range are clamped, so check the spelling.
+Keep `--columns auto` unless the user wants a narrower window: then lines that are wider wrap. Lines wider than 400 characters always wrap; cut them if that looks wrong. An unknown theme or backdrop falls back to the default, and values out of range are clamped, so check the spelling.
 
 Save to the current working directory with a short name from the content or title, for example `./pnpm-test.png`, unless the user gave a path.
 
 ## Step 3: Make the link
 
 ```bash
-node scripts/link.mjs --theme dracula --title "pnpm test" < out.ansi
+node scripts/link.mjs --theme dracula --title "pnpm test" < "$TMP/out.ansi"
 # or
 FORCE_COLOR=1 pnpm test 2>&1 | node scripts/link.mjs --title "pnpm test"
 ```
@@ -83,7 +83,7 @@ Use Chrome through the browser tool you have: for example a Chrome extension or 
    ```js
    (<contents of capture.js>)({ format: "png", language: undefined })
    ```
-   The snippet waits for the fonts and the layout. It returns `{ dataUrl, link }`.
+   The snippet waits for the fonts and the layout. It returns `{ dataUrl, link }`. Most browser tools wrap the value they return (for example `{ "success": true, "data": { "result": … } }`), so find `dataUrl` and `link` in the tool's output first.
 4. Remove everything up to the first comma from `dataUrl`, and base64-decode the rest into the output file. For example: `sed 's/^data:[^,]*,//' | base64 -d > out.png`.
 
 ### Without a browser tool
@@ -98,13 +98,13 @@ Tell the user:
 2. The link. It opens the same picture in the editor, where they can recolor text, change the theme or export again. Use the `link` that the capture returned: after `language`, only that link has the syntax colors.
 3. The settings you used, and that they can change any of them.
 
-Then stop. Do not open or check the image again unless the user asks.
+Delete the temporary directory. Then stop. Do not open or check the image again unless the user asks.
 
 ## Troubleshooting
 
 - **"Save button not ready":** the page did not load or the fonts did not arrive. Check the network, and try again.
 - **"Menu item … not found" or "Syntax control not found":** the boron.sh UI changed. Give the user the link, and they can save the image manually.
-- **No colors in the image:** the command wrote no escape codes. Check with `cat -v out.ansi | head`. You should see `^[[`. Force color (step 1).
+- **No colors in the image:** the command wrote no escape codes. Check with `cat -v "$TMP/out.ansi" | head`. You should see `^[[`. Force color (step 1).
 - **Code without colors:** give the `language` option to `capture.js`. The `syntax` parameter in a link only affects the next paste, not the content of the link.
 - **Empty rows at the bottom:** `link.mjs` removes trailing newlines. If you made the link by hand, remove them yourself.
 - **Very long output:** a document can have 5000 lines at most. For an image, a few dozen lines is usually better. Cut the output to the part that matters.
