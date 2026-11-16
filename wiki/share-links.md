@@ -66,7 +66,7 @@ Two consequences worth knowing:
 
 **Only a *fragment* link reopens.** The query string is the app's own handwriting now, so the `hashchange` handler that exists for links pasted into a tab already on Boron has to tell the two apart — `hasFragmentLink` is that test. Without it the app reopens its own address, replacing the document with a copy of itself and costing the undo stack every time.
 
-`highlight` is the one workspace field no link carries. It decides no pixels, and a link states its content as ANSI — so whatever the sender had selected, what arrives is text that names its own colours, and `fromWire` says so by returning `ansi`.
+**A link's `syntax` paints nothing.** It carries the workspace's `highlight` so that a reload keeps the control where it was, and it only decides what the reader's *next* paste does. The colours are already in `content`, because a highlighted document travels as ANSI that names them. So `syntax=typescript` never re-colours on open, and plain code written into a link by hand arrives uncoloured. Highlighting on open would undo the hand edits of anyone who highlighted a block and then recoloured a token, and the link would no longer describe the picture its sender saw. A hand-written link that wants colours has to carry them as escape codes.
 
 ## What v1 actually promises
 
