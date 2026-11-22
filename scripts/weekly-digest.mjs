@@ -11,7 +11,8 @@
 // the public internet, so there is no shared secret to guard.
 //
 // Reads from the environment:
-//   VERCEL_TOKEN     required — https://vercel.com/account/tokens
+//   VERCEL_TOKEN     https://vercel.com/account/tokens — without it the run
+//                    skips with a warning rather than failing, see main()
 //   RESEND_API_KEY   required unless --dry-run — https://resend.com/api-keys
 //   DIGEST_TO        required unless --dry-run — where the mail goes
 //   DIGEST_FROM      optional — defaults to onboarding@resend.dev, which Resend
@@ -121,7 +122,15 @@ function summarise(rows) {
 }
 
 async function main() {
-  if (!process.env.VERCEL_TOKEN) throw new Error("VERCEL_TOKEN is not set");
+  // A missing token means the digest was never switched on, not that it broke,
+  // so it skips rather than failing — a red run every Monday would mail its own
+  // failure notice for a job nobody has asked to start. A token that is set but
+  // wrong still fails loudly, at the first query.
+  if (!process.env.VERCEL_TOKEN) {
+    const message = "VERCEL_TOKEN is not set, so there is nothing to send";
+    console.log(process.env.GITHUB_ACTIONS ? `::warning::${message}` : message);
+    return;
+  }
 
   const [visits, previous, events, formats, flavours, referrers] = await Promise.all([
     query("visits/count", THIS_WEEK),
