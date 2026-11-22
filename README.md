@@ -21,6 +21,7 @@
 - **Eight themes** — Boron, VS Code Dark+, Dracula, Tokyo Night, Catppuccin Mocha, Nord, One Dark, Solarized Dark.
 - **Export PNG, SVG, JPEG or WebP**, or copy the image straight to the clipboard.
 - **Copy it back out as text** — raw ANSI, a runnable chalk snippet, or plain text. Mock up what you want a program to print, then hand an agent the escape sequence.
+- **Let an agent take the screenshot.** The [Boron skill](skills/boron/SKILL.md) turns a command's output into a saved image and a link that reopens it here. Install it with `npx skills add colinhacks/boron`.
 
 <p align="center">
   <img src="public/example.png" alt="An exported terminal block showing a dev server starting, with a colored prompt, underlined links, a filled project name and a green READY badge">

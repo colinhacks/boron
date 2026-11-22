@@ -4,20 +4,21 @@
  *
  *   FORCE_COLOR=1 pnpm test | node link.mjs --theme dracula --title "pnpm test"
  *
- * The content travels uncompressed (`u` + base64url of the raw bytes), which
- * every reader accepts. Settings left out are not written: an unsaid setting
- * resolves through frozen defaults, so the link still renders the same picture
- * for everyone. Past MAX_QUERY_URL_LENGTH the parameters move to the fragment,
- * which has no practical length limit.
+ * The content travels as raw DEFLATE (`z` + base64url), the same encoding the
+ * app's own "Copy link" writes. Settings left out are not written: an unsaid
+ * setting resolves through the link format's frozen defaults, so the link still
+ * renders the same picture for everyone. Past MAX_QUERY_URL_LENGTH the
+ * parameters move to the fragment, which has no practical length limit.
  *
  * `--columns` defaults to `auto`: the width of the longest visible line, kept
  * between MIN_COLUMNS and MAX_COLUMNS, so output wider than a default terminal
  * does not wrap in the picture.
  *
- * No dependencies, so any agent with Node can run it.
+ * Node 18 or newer, and no dependencies.
  */
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
+import { deflateRawSync } from "node:zlib";
 
 const MAX_QUERY_URL_LENGTH = 8_000;
 /** The app's default width, and the widest block a link may ask for. */
@@ -51,7 +52,6 @@ const { values } = parseArgs({
     base: { type: "string", default: "https://boron.sh/" },
     theme: { type: "string" },
     backdrop: { type: "string" },
-    syntax: { type: "string" },
     padding: { type: "string" },
     radius: { type: "string" },
     "title-bar": { type: "string" },
@@ -65,15 +65,18 @@ const { values } = parseArgs({
 
 if (values.help) {
   console.log(
-    "Usage: node link.mjs [--theme id] [--backdrop id|none|#rrggbb] [--syntax auto|ansi|lang] " +
-      "[--padding px] [--radius px] [--title-bar on|off] [--title text] [--shadow 0-100] " +
-      "[--columns auto|n] [--aspect og|square|wide] [--base url] < output.ansi",
+    "Usage: node link.mjs [--theme id] [--backdrop id|none|#rrggbb] [--padding px] [--radius px] " +
+      "[--title-bar on|off] [--title text] [--shadow 0-100] [--columns auto|n] " +
+      "[--aspect og|square|wide] [--base url] < output.ansi",
   );
   process.exit(0);
 }
 
-/** Trailing newlines would become empty rows at the bottom of the block. */
-const content = readFileSync(0, "utf8").replace(/\n+$/, "");
+/**
+ * Trailing line breaks would become empty rows at the bottom of the block. A
+ * pseudo-terminal writes them as CRLF, so both characters go.
+ */
+const content = readFileSync(0, "utf8").replace(/[\r\n]+$/, "");
 if (content === "") {
   console.error("link.mjs: no content on stdin");
   process.exit(1);
@@ -81,12 +84,11 @@ if (content === "") {
 
 const params = new URLSearchParams();
 params.set("v", "1");
-params.set("content", `u${Buffer.from(content, "utf8").toString("base64url")}`);
+params.set("content", `z${deflateRawSync(Buffer.from(content, "utf8")).toString("base64url")}`);
 
 const SETTINGS = {
   theme: "theme",
   backdrop: "backdrop",
-  syntax: "syntax",
   padding: "padding",
   radius: "radius",
   "title-bar": "titleBar",

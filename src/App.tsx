@@ -45,6 +45,7 @@ import { Sidebar } from "./ui/Sidebar.tsx";
 import { SplitButton } from "./ui/SplitButton.tsx";
 import { FloatingToolbar } from "./ui/FloatingToolbar.tsx";
 import { sampleDocument } from "./ui/sample.ts";
+import { installPageApi } from "./page-api.ts";
 import { buildShareUrl, hasFragmentLink, readSharedWorkspace, trackingUrl } from "./share.ts";
 import {
   sanitizeBackgroundId,
@@ -242,6 +243,12 @@ export function App({ shared }: AppProps = {}) {
     () => ({ document: value, themeId, backgroundId, frame, highlight }),
     [value, themeId, backgroundId, frame, highlight],
   );
+
+  // Read through a ref so a script's export always sees the latest edit without
+  // the object on `window` being replaced under it.
+  const workspaceRef = useRef(workspace);
+  workspaceRef.current = workspace;
+  useEffect(() => installPageApi(() => workspaceRef.current), []);
 
   useEffect(() => {
     try {
