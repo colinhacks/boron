@@ -136,6 +136,7 @@ Everything arriving from outside — a stored workspace, a share link, a pasted 
 | Change how a column selection behaves | [src/editor/box.ts](../src/editor/box.ts) for the geometry and the commands, [src/editor/BoxSelection.tsx](../src/editor/BoxSelection.tsx) for the state and the screen grid, [src/editor/TerminalEditor.tsx](../src/editor/TerminalEditor.tsx) for the alt-drag gesture and the keyboard |
 | Change the copy-out formats | [src/core/serialize.ts](../src/core/serialize.ts); the menu is `COPY_MODES` in [src/App.tsx](../src/App.tsx) |
 | Change the export formats or scale | [src/export/index.ts](../src/export/index.ts) |
+| Change what a script can export | [src/page-api.ts](../src/page-api.ts), which puts `window.boron` on the page for the [agent skill](../skills/boron/SKILL.md). Copies of that skill on other machines call it, so it is frozen like the wire format: add an optional field, or a `version: 2` beside v1 |
 | Change the starting document | [src/ui/sample.ts](../src/ui/sample.ts), and bump `STORAGE_KEY` so it reaches existing visitors |
 | Change the bundled font, or what it covers | [scripts/build-fonts.py](../scripts/build-fonts.py) for the subsetting, [src/export/fonts.ts](../src/export/fonts.ts) for the families and when the icon face is fetched — the PUA range list appears in both and they have to agree. [fonts.md](fonts.md) has the reasoning |
 
