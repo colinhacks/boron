@@ -55,9 +55,9 @@ There are two ways a link gets written, and the difference between them is the o
 
 `buildShareUrl` is "Copy link" in the export button — made once, on a button press, and allowed to be enormous. Past `MAX_QUERY_URL_LENGTH` it moves the parameters to the **fragment**, which never reaches a server and so has no practical length limit. A six-hundred-line document copies as an eleven-kilobyte link that reopens all six hundred lines.
 
-`trackingUrl` is what the address bar shows while you edit. It runs on every pause in typing — debounced by `URL_SYNC_DELAY` in [App.tsx](../src/App.tsx), because Safari throws once `replaceState` is called about a hundred times in thirty seconds — so it is a different job with two deliberate differences:
+`trackingUrl` is what the address bar shows while you edit. It runs throughout an edit, throttled to `URL_WRITE_INTERVAL` in [platform.ts](../src/ui/platform.ts) because Safari throws once `replaceState` is called about a hundred times in thirty seconds. That makes it a different job with two deliberate differences:
 
-- **No fragment fallback.** An address bar that is re-encoded and rewritten every half second cannot be two hundred kilobytes long, and a document that big has `localStorage` holding it anyway.
+- **No fragment fallback.** An address bar that is re-encoded and rewritten many times a second cannot be two hundred kilobytes long, and a document that big has `localStorage` holding it anyway.
 - **Giving up means clearing the parameters, not leaving the last ones that fit.** This is the part that would be a bug if it were done the obvious way: a URL wins over `localStorage` on the next load, so an address left describing the document you had *before* the paste would silently throw the paste away on reload.
 
 Two consequences worth knowing:
@@ -66,7 +66,7 @@ Two consequences worth knowing:
 
 **Only a *fragment* link reopens.** The query string is the app's own handwriting now, so the `hashchange` handler that exists for links pasted into a tab already on Boron has to tell the two apart — `hasFragmentLink` is that test. Without it the app reopens its own address, replacing the document with a copy of itself and costing the undo stack every time.
 
-`highlight` is the one workspace field no link carries. It decides no pixels, and a link states its content as ANSI — so whatever the sender had selected, what arrives is text that names its own colours, and `fromWire` says so by returning `ansi`.
+**A link's `syntax` paints nothing.** It carries the workspace's `highlight` so that a reload keeps the control where it was, and it only decides what the reader's *next* paste does. The colours are already in `content`, because a highlighted document travels as ANSI that names them. So `syntax=typescript` never re-colours on open, and plain code written into a link by hand arrives uncoloured. Highlighting on open would undo the hand edits of anyone who highlighted a block and then recoloured a token, and the link would no longer describe the picture its sender saw. A hand-written link that wants colours has to carry them as escape codes.
 
 ## What v1 actually promises
 

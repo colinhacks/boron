@@ -165,11 +165,11 @@ export async function buildShareUrl(workspace: Workspace, base: string): Promise
  *
  * The same link as `buildShareUrl` while one fits in a query string, and the
  * bare page once it does not. Two differences from a copied link, both because
- * this one is rewritten on every pause in typing rather than made once on a
- * button press:
+ * this one is rewritten throughout an edit rather than made once on a button
+ * press:
  *
  * There is no fragment fallback. A copied link may be two hundred kilobytes
- * long; an address bar that is re-encoded and rewritten every half second may
+ * long; an address bar that is re-encoded and rewritten many times a second may
  * not, and a document that big has `localStorage` holding it anyway.
  *
  * And giving up means *clearing* the parameters rather than leaving the last
