@@ -429,7 +429,7 @@ export function App({ shared }: AppProps = {}) {
    * Built here rather than read off the address bar, which is usually the same
    * string: the bar gives up on a document too long for a query string, and this
    * one falls back to the fragment instead. It is also always current, where the
-   * bar is up to half a second behind.
+   * bar can trail by one `URL_WRITE_INTERVAL`.
    */
   const handleCopyLink = useCallback(async () => {
     try {
